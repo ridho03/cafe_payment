@@ -19,9 +19,10 @@
             --gap: 6mm;
             --card-padding: 7mm;
             --qr-size: 62mm;
-            --title-size: 22px;
+            --brand-size: 13px;
+            --title-size: 28px;
             --body-size: 11px;
-            --caption-size: 13px;
+            --caption-size: 12px;
         }
         body[data-layout="label"] {
             --page-padding: 9mm;
@@ -30,9 +31,10 @@
             --gap: 4mm;
             --card-padding: 4mm;
             --qr-size: 35mm;
-            --title-size: 16px;
+            --brand-size: 9px;
+            --title-size: 17px;
             --body-size: 8px;
-            --caption-size: 10px;
+            --caption-size: 8px;
         }
         body {
             margin: 0;
@@ -125,12 +127,13 @@
             text-align: center;
         }
         .brand {
-            margin: 0 0 2mm;
+            margin: 0 0 1.5mm;
             color: #8a4b16;
-            font-family: Georgia, "Times New Roman", serif;
-            font-size: calc(var(--title-size) - 5px);
-            font-weight: 800;
-            line-height: 1;
+            font-size: var(--brand-size);
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            line-height: 1.1;
+            text-transform: uppercase;
         }
         .table-name {
             margin: 0;
@@ -139,7 +142,7 @@
             font-family: Georgia, "Times New Roman", serif;
             font-size: var(--title-size);
             font-weight: 900;
-            line-height: 1.05;
+            line-height: 1;
             overflow-wrap: anywhere;
         }
         .meta {
@@ -157,21 +160,45 @@
         }
         .hint {
             margin: 0;
-            color: #1c120b;
+            color: #8a4b16;
             font-size: var(--caption-size);
             font-weight: 900;
-            letter-spacing: 0;
+            letter-spacing: 0.14em;
             line-height: 1.2;
             text-transform: uppercase;
         }
-        .url {
-            max-width: 100%;
-            margin: 2mm 0 0;
-            color: #6d625a;
+        .instruction {
+            margin: 1mm 0 0;
+            color: #4c4038;
             font-size: var(--body-size);
-            font-weight: 700;
-            line-height: 1.25;
-            overflow-wrap: anywhere;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        .code-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 7mm;
+            margin-top: 3mm;
+            border: 1px solid #ead7b7;
+            border-radius: 999px;
+            background: #fff7ed;
+            color: #4a2d14;
+            font-size: var(--body-size);
+            font-weight: 900;
+            line-height: 1;
+            padding: 1.5mm 4mm;
+        }
+        body[data-layout="label"] .instruction {
+            display: none;
+        }
+        body[data-layout="label"] .brand {
+            display: none;
+        }
+        body[data-layout="label"] .code-pill {
+            min-height: 5mm;
+            margin-top: 1.8mm;
+            padding: 1mm 3mm;
         }
         .empty {
             display: grid;
@@ -225,10 +252,11 @@
                     <article class="qr-card">
                         <p class="brand">{{ config('app.name') }}</p>
                         <h1 class="table-name">{{ $table->name }}</h1>
-                        <p class="meta">{{ $table->capacity }} kursi &middot; {{ $table->code }}</p>
+                        <p class="meta">{{ $table->capacity }} kursi</p>
                         <img src="{{ route('admin.tables.qr', $table) }}" alt="QR {{ $table->name }}">
-                        <p class="hint">Scan untuk pesan</p>
-                        <p class="url">{{ route('customer.menu', ['table' => $table->code]) }}</p>
+                        <p class="hint">Scan Menu</p>
+                        <p class="instruction">Arahkan kamera ke QR untuk pesan dari meja ini.</p>
+                        <p class="code-pill">{{ $table->code }}</p>
                     </article>
                 @endforeach
             </section>

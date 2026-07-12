@@ -234,7 +234,8 @@ class ExampleTest extends TestCase
         $response->assertSee('Cetak QR Meja');
         $response->assertSee('Kartu meja 4/A4');
         $response->assertSee('Label kecil 8/A4');
-        $response->assertSee('Scan untuk pesan');
+        $response->assertSee('Scan Menu');
+        $response->assertSee('Arahkan kamera ke QR');
         $response->assertSee('data-layout="card"', false);
         $response->assertSee('@page { size: A4 portrait; margin: 0; }', false);
     }

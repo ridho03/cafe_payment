@@ -54,8 +54,9 @@
                     <div class="mt-4 rounded-lg border border-amber-100 bg-white p-3 shadow-inner shadow-amber-900/5">
                         <img src="{{ route('admin.tables.qr', $table) }}" alt="QR {{ $table->name }}" class="mx-auto aspect-square w-full max-w-56">
                     </div>
-                    <a href="{{ route('customer.menu', ['table' => $table->code]) }}" class="mt-3 block break-all rounded-lg bg-amber-50 p-3 text-xs font-semibold text-stone-600 transition hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-800">
-                        {{ route('customer.menu', ['table' => $table->code]) }}
+                    <a href="{{ route('customer.menu', ['table' => $table->code]) }}" target="_blank" class="mt-3 flex min-h-11 items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm font-extrabold text-amber-950 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-800">
+                        <span>Buka menu pelanggan</span>
+                        <span class="shrink-0 text-xs text-stone-500">{{ $table->code }}</span>
                     </a>
                     <div class="mt-3 grid gap-2 sm:grid-cols-2">
                         <a href="{{ route('admin.tables.qr', $table) }}" download="qr-{{ \Illuminate\Support\Str::slug($table->name) }}.svg" class="pc-button-secondary w-full">
