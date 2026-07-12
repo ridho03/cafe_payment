@@ -1,0 +1,67 @@
+CATATAN PENGGUNAAN - PAYMENT CAFE
+
+1. Login
+- Gunakan akun sesuai peran: developer, admin cafe, kasir, atau dapur.
+- Developer/penyedia aplikasi punya akses penuh termasuk Maintenance.
+- Admin cafe tidak punya akses ke Maintenance.
+- Akun demo tidak ditampilkan di halaman login agar aman untuk production.
+- Ganti semua password demo sebelum dipakai transaksi asli.
+
+2. QR Meja
+- Buka Admin > Meja.
+- Gunakan Cetak semua QR untuk membuat lembar QR yang siap diprint.
+- Pilih Kartu meja 4/A4 untuk standing card atau Label kecil 8/A4 untuk stiker.
+- Gunakan Export SVG di kartu meja jika hanya ingin mengambil QR meja tertentu.
+- Tempel QR sesuai meja agar pelanggan langsung masuk ke menu meja yang benar.
+
+3. Alur Pesanan
+- Pelanggan scan QR meja.
+- Pelanggan pilih menu, varian, dan jumlah.
+- Pelanggan checkout.
+- Kasir menandai pembayaran lunas.
+- Dapur memproses pesanan sampai status selesai.
+
+4. Kasir dan Struk
+- Buka halaman Kasir.
+- Klik Tandai Lunas jika pembayaran sudah diterima.
+- Klik Cetak Struk.
+- Pilih ukuran 58mm atau 80mm sesuai printer thermal.
+
+5. Dapur
+- Buka halaman Dapur di perangkat dapur.
+- Gunakan tombol Proses, Siap, dan Selesai.
+- Halaman dapur sudah auto-refresh.
+
+6. Notifikasi Suara
+- Klik Aktifkan suara di perangkat kasir/waiter/dapur.
+- Browser mengharuskan klik manual sebelum suara bisa berjalan.
+- Suara akan aktif saat ada perubahan pesanan setelah refresh.
+
+7. Laporan
+- Buka Admin > Laporan.
+- Pilih rentang tanggal.
+- Gunakan Export CSV jika ingin rekap di Excel.
+
+8. Maintenance
+- Buka Admin > Maintenance.
+- Halaman ini hanya untuk developer/penyedia aplikasi.
+- Gunakan Export SQL untuk backup manual sebelum deploy, update menu besar, atau pindah server.
+- Gunakan Tambah user internal untuk membuat akun admin cafe, kasir, dapur, atau developer baru.
+- Gunakan Clear Cache setelah deploy jika tampilan, route, atau config belum berubah.
+
+9. Hal Wajib Sebelum Production
+- APP_DEBUG=false
+- APP_ENV=production
+- APP_URL sesuai domain
+- Password akun diganti
+- Akun developer disimpan hanya oleh penyedia aplikasi
+- Database tidak memakai user root
+- Menu dan foto sudah diganti dengan data asli
+- Printer thermal dites di perangkat kasir
+- Backup database disiapkan
+
+10. Saran Fitur Setelah Launching
+- Setting profil cafe dan footer struk
+- Backup otomatis terjadwal
+- Diskon dan pajak yang bisa diatur
+- Stok bahan/menu

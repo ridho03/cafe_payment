@@ -1,0 +1,180 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\MenuCategory;
+use App\Models\MenuItem;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+
+class AdminMenuController extends Controller
+{
+    public function index()
+    {
+        $categories = MenuCategory::with(['items' => fn ($query) => $query
+            ->withCount('orderItems')
+            ->orderBy('sort_order')
+            ->orderBy('name')])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        return view('admin.menu', compact('categories'));
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'menu_category_id' => ['nullable', 'exists:menu_categories,id'],
+            'category_name' => ['nullable', 'string', 'max:60'],
+            'name' => ['required', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'price' => ['required', 'integer', 'min:1000', 'max:9999999'],
+            'image_url' => ['nullable', 'url', 'max:500'],
+            'image_upload' => ['nullable', 'image', 'max:4096'],
+            'variants' => ['nullable', 'array'],
+            'variants.*' => ['nullable', 'string', 'max:40'],
+            'custom_variants' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $categoryId = $validated['menu_category_id'] ?? null;
+
+        if (! $categoryId) {
+            $category = MenuCategory::firstOrCreate(
+                ['name' => ($validated['category_name'] ?? null) ?: 'Menu Baru'],
+                ['sort_order' => MenuCategory::max('sort_order') + 10]
+            );
+
+            $categoryId = $category->id;
+        }
+
+        MenuItem::create([
+            'menu_category_id' => $categoryId,
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'price' => $validated['price'],
+            'image_url' => $this->imageUrlFromRequest($request, $validated['image_url'] ?? null),
+            'variants' => MenuItem::normalizeVariants($validated['variants'] ?? [], $validated['custom_variants'] ?? null),
+            'is_available' => true,
+            'sort_order' => MenuItem::where('menu_category_id', $categoryId)->max('sort_order') + 10,
+        ]);
+
+        return redirect()->route('admin.menu')->with('success', 'Menu baru berhasil ditambahkan.');
+    }
+
+    public function update(Request $request, MenuItem $menuItem)
+    {
+        $validated = $request->validate([
+            'menu_category_id' => ['required', 'exists:menu_categories,id'],
+            'name' => ['required', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'price' => ['required', 'integer', 'min:1000', 'max:9999999'],
+            'image_url' => ['nullable', 'url', 'max:500'],
+            'image_upload' => ['nullable', 'image', 'max:4096'],
+            'remove_image' => ['nullable', 'boolean'],
+            'variants' => ['nullable', 'array'],
+            'variants.*' => ['nullable', 'string', 'max:40'],
+            'custom_variants' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $imageUrl = $menuItem->image_url;
+
+        if ($request->hasFile('image_upload')) {
+            $this->deleteUploadedImage($menuItem->image_url);
+            $imageUrl = $this->storeUploadedImage($request);
+        } elseif ($request->boolean('remove_image')) {
+            $this->deleteUploadedImage($menuItem->image_url);
+            $imageUrl = null;
+        } elseif (array_key_exists('image_url', $validated)) {
+            $newUrl = $validated['image_url'] ?? null;
+
+            if ($newUrl && $newUrl !== $menuItem->image_url) {
+                $this->deleteUploadedImage($menuItem->image_url);
+                $imageUrl = $newUrl;
+            } elseif (! $newUrl && $menuItem->image_url && ! $this->isUploadedImage($menuItem->image_url)) {
+                $imageUrl = null;
+            }
+        }
+
+        $variants = $request->has('variants') || $request->has('custom_variants')
+            ? MenuItem::normalizeVariants($validated['variants'] ?? [], $validated['custom_variants'] ?? null)
+            : $menuItem->availableVariants();
+
+        $menuItem->update([
+            'menu_category_id' => $validated['menu_category_id'],
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'price' => $validated['price'],
+            'image_url' => $imageUrl,
+            'variants' => $variants,
+        ]);
+
+        return redirect()->route('admin.menu')->with('success', 'Menu berhasil diperbarui.');
+    }
+
+    public function toggle(MenuItem $menuItem)
+    {
+        $menuItem->update(['is_available' => ! $menuItem->is_available]);
+
+        return redirect()->route('admin.menu')->with('success', 'Status menu berhasil diubah.');
+    }
+
+    public function destroy(MenuItem $menuItem)
+    {
+        abort_if($menuItem->orderItems()->exists(), 422, 'Menu sudah pernah dipesan, ubah menjadi Habis agar histori transaksi tetap aman.');
+
+        $this->deleteUploadedImage($menuItem->image_url);
+        $menuItem->delete();
+
+        return redirect()->route('admin.menu')->with('success', 'Menu berhasil dihapus.');
+    }
+
+    private function imageUrlFromRequest(Request $request, ?string $fallbackUrl): ?string
+    {
+        if ($request->hasFile('image_upload')) {
+            return $this->storeUploadedImage($request);
+        }
+
+        return $fallbackUrl;
+    }
+
+    private function storeUploadedImage(Request $request): string
+    {
+        $file = $request->file('image_upload');
+        $directory = public_path('uploads/menu');
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
+        $file->move($directory, $filename);
+
+        return 'uploads/menu/'.$filename;
+    }
+
+    private function deleteUploadedImage(?string $imageUrl): void
+    {
+        if (! $this->isUploadedImage($imageUrl)) {
+            return;
+        }
+
+        $path = parse_url($imageUrl, PHP_URL_PATH);
+
+        if (! $path) {
+            return;
+        }
+
+        $fullPath = public_path(ltrim($path, '/'));
+
+        if (File::exists($fullPath)) {
+            File::delete($fullPath);
+        }
+    }
+
+    private function isUploadedImage(?string $imageUrl): bool
+    {
+        return filled($imageUrl) && (str_contains($imageUrl, '/uploads/menu/') || str_starts_with($imageUrl, 'uploads/menu/'));
+    }
+}
