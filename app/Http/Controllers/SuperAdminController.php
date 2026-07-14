@@ -297,7 +297,14 @@ class SuperAdminController extends Controller
             'clear_keys' => ['nullable', 'boolean'],
         ]);
 
-        $setting = $cafe->midtransSetting ?: new CafeMidtransSetting(['cafe_id' => $cafe->id]);
+        $setting = $cafe->midtransSetting;
+
+        if ($setting?->hasUnreadableKeys()) {
+            $setting->delete();
+            $setting = null;
+        }
+
+        $setting ??= new CafeMidtransSetting(['cafe_id' => $cafe->id]);
         $setting->mode = $validated['mode'];
         $setting->merchant_id = $validated['merchant_id'] ?? null;
         $setting->is_integrated = $request->boolean('is_integrated');

@@ -13,6 +13,7 @@ use App\Services\MidtransSnapService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -322,6 +323,48 @@ class ExampleTest extends TestCase
             ->assertOk()
             ->assertSee($setting->maskedServerKey())
             ->assertDontSee('SB-Mid-server-test-abcdef');
+    }
+
+    public function test_super_admin_can_replace_unreadable_midtrans_keys(): void
+    {
+        $this->seed();
+        $this->actingAs($this->developerUser());
+        $cafe = Cafe::firstOrFail();
+
+        $setting = CafeMidtransSetting::create([
+            'cafe_id' => $cafe->id,
+            'mode' => 'sandbox',
+            'merchant_id' => 'G123456789',
+            'client_key' => 'old-client-key',
+            'server_key' => 'old-server-key',
+            'is_integrated' => true,
+        ]);
+
+        DB::table('cafe_midtrans_settings')
+            ->where('id', $setting->id)
+            ->update([
+                'client_key' => 'encrypted-with-another-app-key',
+                'server_key' => 'also-not-readable',
+            ]);
+
+        $this->get(route('super-admin.midtrans'))
+            ->assertOk()
+            ->assertSee('Perlu input ulang');
+
+        $response = $this->patch(route('super-admin.midtrans.update', $cafe), [
+            'mode' => 'production',
+            'merchant_id' => 'G987654321',
+            'client_key' => 'Mid-client-fresh',
+            'server_key' => 'Mid-server-fresh',
+            'is_integrated' => '1',
+        ]);
+
+        $response->assertRedirect(route('super-admin.midtrans'));
+
+        $freshSetting = CafeMidtransSetting::where('cafe_id', $cafe->id)->firstOrFail();
+        $this->assertSame('Mid-client-fresh', $freshSetting->client_key);
+        $this->assertSame('Mid-server-fresh', $freshSetting->server_key);
+        $this->assertTrue($freshSetting->isReady());
     }
 
     public function test_super_admin_can_impersonate_admin_and_return(): void
@@ -743,7 +786,8 @@ class ExampleTest extends TestCase
         $response->assertOk();
         $response->assertSee($table->name);
         $response->assertSee('Buat Pesanan');
-        $response->assertSee('data-auto-refresh="20"', false);
+        $response->assertSee('Rincian, nama, dan catatan');
+        $response->assertSee('data-auto-refresh="0"', false);
     }
 
     public function test_admin_menu_renders_custom_variant_controls(): void
@@ -903,6 +947,7 @@ class ExampleTest extends TestCase
         $this->assertRouteUsesPublicId(route('admin.menu.destroy', $item), $item);
 
         $this->post(route('customer.orders.store', ['table' => $table->code]), [
+            'payment_method' => 'cash',
             'items' => [
                 $item->id => 1,
             ],
@@ -924,6 +969,7 @@ class ExampleTest extends TestCase
         $item->update(['variants' => ['hot', 'ice', 'Large']]);
 
         $response = $this->post(route('customer.orders.store', ['table' => $table->code]), [
+            'payment_method' => 'cash',
             'customer_name' => 'Budi',
             'items' => [
                 $item->id => 2,
@@ -949,6 +995,27 @@ class ExampleTest extends TestCase
         $statusResponse = $this->get(route('orders.status', $order));
         $statusResponse->assertOk();
         $statusResponse->assertSee('data-auto-refresh="4"', false);
+    }
+
+    public function test_customer_must_choose_payment_method_before_checkout(): void
+    {
+        $this->seed();
+
+        $table = CafeTable::firstOrFail();
+        $item = MenuItem::where('is_available', true)->firstOrFail();
+
+        $this->from(route('customer.menu', ['table' => $table->code]))
+            ->post(route('customer.orders.store', ['table' => $table->code]), [
+                'items' => [
+                    $item->id => 1,
+                ],
+            ])
+            ->assertRedirect(route('customer.menu', ['table' => $table->code]))
+            ->assertSessionHasErrors('payment_method');
+
+        $this->assertDatabaseMissing('orders', [
+            'cafe_table_id' => $table->id,
+        ]);
     }
 
     public function test_customer_can_choose_multiple_variant_groups_with_price_delta(): void
@@ -1082,6 +1149,7 @@ class ExampleTest extends TestCase
         $item = MenuItem::where('is_available', true)->firstOrFail();
 
         $this->post(route('customer.orders.store', ['table' => $table->code]), [
+            'payment_method' => 'cash',
             'customer_name' => 'Budi',
             'items' => [
                 $item->id => 1,
@@ -1106,6 +1174,7 @@ class ExampleTest extends TestCase
         $item = MenuItem::where('is_available', true)->firstOrFail();
 
         $this->post(route('customer.orders.store', ['table' => $table->code]), [
+            'payment_method' => 'cash',
             'items' => [
                 $item->id => 1,
             ],
@@ -1129,6 +1198,7 @@ class ExampleTest extends TestCase
         $item = MenuItem::where('is_available', true)->firstOrFail();
 
         $this->post(route('customer.orders.store', ['table' => $table->code]), [
+            'payment_method' => 'cash',
             'items' => [
                 $item->id => 1,
             ],

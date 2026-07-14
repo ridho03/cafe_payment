@@ -37,18 +37,46 @@ class CafeMidtransSetting extends Model
 
     public function maskedClientKey(): string
     {
-        return $this->maskSecret($this->client_key);
+        return $this->maskSecret('client_key');
     }
 
     public function maskedServerKey(): string
     {
-        return $this->maskSecret($this->server_key);
+        return $this->maskSecret('server_key');
     }
 
-    private function maskSecret(?string $value): string
+    public function clientKey(): ?string
     {
+        return $this->readEncryptedAttribute('client_key');
+    }
+
+    public function serverKey(): ?string
+    {
+        return $this->readEncryptedAttribute('server_key');
+    }
+
+    public function hasReadableKeys(): bool
+    {
+        return filled($this->clientKey()) && filled($this->serverKey());
+    }
+
+    public function hasUnreadableKeys(): bool
+    {
+        return $this->encryptedAttributeIsUnreadable('client_key')
+            || $this->encryptedAttributeIsUnreadable('server_key');
+    }
+
+    public function isReady(): bool
+    {
+        return $this->is_integrated && $this->hasReadableKeys();
+    }
+
+    private function maskSecret(string $attribute): string
+    {
+        $value = $this->readEncryptedAttribute($attribute);
+
         if (! filled($value)) {
-            return 'Belum diisi';
+            return filled($this->getRawOriginal($attribute)) ? 'Perlu input ulang' : 'Belum diisi';
         }
 
         $length = strlen($value);
@@ -58,5 +86,19 @@ class CafeMidtransSetting extends Model
         }
 
         return substr($value, 0, 4).str_repeat('*', max(8, $length - 8)).substr($value, -4);
+    }
+
+    private function readEncryptedAttribute(string $attribute): ?string
+    {
+        try {
+            return $this->getAttribute($attribute);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function encryptedAttributeIsUnreadable(string $attribute): bool
+    {
+        return filled($this->getRawOriginal($attribute)) && $this->readEncryptedAttribute($attribute) === null;
     }
 }

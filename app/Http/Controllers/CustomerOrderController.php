@@ -52,10 +52,8 @@ class CustomerOrderController extends Controller
             'items' => ['required', 'array'],
             'items.*' => ['nullable', 'integer', 'min:0', 'max:20'],
             'item_variants' => ['nullable', 'array'],
-            'payment_method' => ['nullable', 'in:cash,midtrans_snap'],
+            'payment_method' => ['required', 'in:cash,midtrans_snap'],
         ]);
-
-        $validated['payment_method'] = $validated['payment_method'] ?? 'cash';
 
         $requestedItems = collect($validated['items'])
             ->map(fn ($quantity) => (int) $quantity)
@@ -182,6 +180,6 @@ class CustomerOrderController extends Controller
     {
         $setting = $table->cafe?->midtransSetting;
 
-        return $setting?->is_integrated && filled($setting->client_key) && filled($setting->server_key);
+        return (bool) $setting?->isReady();
     }
 }

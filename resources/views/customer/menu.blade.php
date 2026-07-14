@@ -1,18 +1,18 @@
 @extends('layouts.app')
 
 @section('title', 'Pesan Menu - ' . $table->name)
-@section('auto_refresh', '20')
+@section('auto_refresh', '0')
 
 @section('content')
 @php
     $format = fn ($amount) => 'Rp ' . number_format($amount, 0, ',', '.');
     $cafeName = $table->cafe?->name ?: $panelBrandName;
     $midtransSetting = $table->cafe?->midtransSetting;
-    $midtransReady = $midtransSetting?->is_integrated && filled($midtransSetting?->client_key) && filled($midtransSetting?->server_key);
+    $midtransReady = (bool) $midtransSetting?->isReady();
 @endphp
 
 <div class="min-h-dvh">
-    <form id="customer-order-form" method="POST" action="{{ route('customer.orders.store', ['table' => $table->code]) }}" class="mx-auto grid max-w-6xl gap-5 px-3 py-4 pb-40 sm:px-4 sm:py-5 lg:grid-cols-[1fr_360px] lg:px-8 lg:pb-8">
+    <form id="customer-order-form" method="POST" action="{{ route('customer.orders.store', ['table' => $table->code]) }}" class="mx-auto grid max-w-6xl gap-5 px-3 py-4 pb-[24rem] sm:px-4 sm:py-5 sm:pb-[24rem] lg:grid-cols-[1fr_360px] lg:px-8 lg:pb-8">
         @csrf
 
         <section class="space-y-5">
@@ -137,19 +137,18 @@
             @endforeach
         </section>
 
-        <aside class="fixed inset-x-0 bottom-0 z-20 max-h-[82dvh] overflow-y-auto rounded-t-lg border border-amber-100 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl shadow-amber-900/15 backdrop-blur-xl sm:p-4 lg:sticky lg:top-24 lg:h-fit lg:max-h-none lg:rounded-lg lg:border lg:pb-4 lg:shadow-[0_20px_60px_rgba(69,36,14,0.12)]">
+        <aside class="fixed inset-x-0 bottom-0 z-20 max-h-[70dvh] overflow-y-auto rounded-t-lg border border-amber-100 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl shadow-amber-900/15 backdrop-blur-xl sm:p-4 lg:sticky lg:inset-auto lg:top-24 lg:h-fit lg:max-h-none lg:overflow-visible lg:rounded-lg lg:pb-4 lg:shadow-[0_20px_60px_rgba(69,36,14,0.12)]">
             <div class="mx-auto max-w-6xl lg:mx-0">
-                <div class="mx-auto mb-2 h-1 w-12 rounded-full bg-amber-200 lg:hidden" aria-hidden="true"></div>
                 <div class="flex items-center justify-between gap-3">
                     <div class="min-w-0">
-                        <h2 class="font-display text-xl leading-tight text-stone-950 lg:text-2xl">Checkout</h2>
+                        <h2 class="font-display text-lg leading-tight text-stone-950 lg:text-2xl">Checkout</h2>
                         <p class="mt-0.5 text-sm font-extrabold tabular-nums text-amber-900 lg:hidden" id="cart-mobile-total">Rp 0</p>
                     </div>
                     <span id="cart-count" class="pc-badge bg-amber-100 text-amber-900">0 item</span>
                 </div>
 
-                <details data-checkout-details class="mt-2 rounded-lg border border-amber-100 bg-white/80 p-3 lg:mt-3 lg:border-0 lg:bg-transparent lg:p-0">
-                    <summary class="cursor-pointer text-sm font-extrabold text-stone-800 lg:hidden">Lihat rincian checkout</summary>
+                <details data-checkout-details class="mt-2 rounded-lg border border-amber-100 bg-white/80 p-2 lg:mt-3 lg:border-0 lg:bg-transparent lg:p-0">
+                    <summary class="cursor-pointer text-sm font-extrabold text-stone-800">Rincian, nama, dan catatan</summary>
                     <div class="mt-3 lg:mt-0">
                         <div class="pc-soft-panel p-3" aria-live="polite">
                             <div id="cart-empty" class="text-sm font-semibold text-stone-600">
@@ -189,34 +188,38 @@
                                 </label>
                             </div>
                         </details>
-                        <fieldset class="mt-3 rounded-lg border border-amber-100 bg-white/80 p-3">
-                            <legend class="text-sm font-extrabold text-stone-800">Metode pembayaran</legend>
-                            <div class="mt-3 grid gap-2">
-                                <label class="flex min-h-12 items-center gap-3 rounded-lg border border-amber-100 bg-amber-50/70 px-3 text-sm font-bold text-stone-700">
-                                    <input name="payment_method" type="radio" value="cash" checked class="size-4 border-amber-300 text-amber-800 focus:ring-2 focus:ring-amber-800">
-                                    <span>
-                                        Cash
-                                        <span class="block text-xs font-semibold text-stone-500">Bayar di kasir.</span>
-                                    </span>
-                                </label>
-                                <label @class([
-                                    'flex min-h-12 items-center gap-3 rounded-lg border px-3 text-sm font-bold',
-                                    'border-amber-100 bg-amber-50/70 text-stone-700' => $midtransReady,
-                                    'border-stone-200 bg-stone-50 text-stone-400' => ! $midtransReady,
-                                ])>
-                                    <input name="payment_method" type="radio" value="midtrans_snap" @disabled(! $midtransReady) class="size-4 border-amber-300 text-amber-800 focus:ring-2 focus:ring-amber-800 disabled:opacity-50">
-                                    <span>
-                                        Cashless
-                                        <span class="block text-xs font-semibold {{ $midtransReady ? 'text-stone-500' : 'text-stone-400' }}">
-                                            {{ $midtransReady ? 'QRIS, e-wallet, kartu, atau VA.' : 'Belum aktif untuk cafe ini.' }}
-                                        </span>
-                                    </span>
-                                </label>
-                            </div>
-                        </fieldset>
                     </div>
                 </details>
-                <button data-submit-order class="pc-button-primary mt-3 min-h-12 w-full text-base lg:mt-4">
+                <fieldset class="mt-2 rounded-lg border border-amber-100 bg-white/90 p-2 lg:mt-3 lg:p-3">
+                    <legend class="px-1 text-xs font-extrabold text-stone-800 lg:text-sm">Pilih pembayaran</legend>
+                    <p data-payment-required class="mt-0.5 px-1 text-xs font-semibold text-amber-800">Wajib dipilih.</p>
+                    <div class="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-1">
+                        <label class="flex min-h-11 items-center gap-2 rounded-lg border border-amber-100 bg-amber-50/70 px-2 text-sm font-bold text-stone-700 transition lg:min-h-12 lg:gap-3 lg:px-3">
+                            <input name="payment_method" type="radio" value="cash" required @checked(old('payment_method') === 'cash') class="size-4 border-amber-300 text-amber-800 focus:ring-2 focus:ring-amber-800">
+                            <span>
+                                Cash
+                                <span class="hidden text-xs font-semibold opacity-75 min-[640px]:block lg:block">Bayar di kasir.</span>
+                            </span>
+                        </label>
+                        <label @class([
+                            'flex min-h-11 items-center gap-2 rounded-lg border px-2 text-sm font-bold transition lg:min-h-12 lg:gap-3 lg:px-3',
+                            'border-amber-100 bg-amber-50/70 text-stone-700' => $midtransReady,
+                            'border-stone-200 bg-stone-50 text-stone-400' => ! $midtransReady,
+                        ])>
+                            <input name="payment_method" type="radio" value="midtrans_snap" required @checked(old('payment_method') === 'midtrans_snap') @disabled(! $midtransReady) class="size-4 border-amber-300 text-amber-800 focus:ring-2 focus:ring-amber-800 disabled:opacity-50">
+                            <span>
+                                Cashless
+                                <span class="hidden text-xs font-semibold opacity-75 min-[640px]:block lg:block">
+                                    {{ $midtransReady ? 'QRIS, e-wallet, kartu, atau VA.' : 'Belum aktif untuk cafe ini.' }}
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+                    @error('payment_method')
+                        <p class="mt-2 text-xs font-bold text-red-700">{{ $message }}</p>
+                    @enderror
+                </fieldset>
+                <button data-submit-order class="pc-button-primary mt-2 min-h-11 w-full text-base lg:mt-4 lg:min-h-12">
                     Pilih menu dulu
                 </button>
             </div>
@@ -241,6 +244,8 @@
         const mobileTotalEl = document.getElementById('cart-mobile-total');
         const submit = form.querySelector('[data-submit-order]');
         const checkoutDetails = form.querySelector('[data-checkout-details]');
+        const paymentInputs = Array.from(form.querySelectorAll('input[name="payment_method"]'));
+        const paymentRequired = form.querySelector('[data-payment-required]');
         const formatter = new Intl.NumberFormat('id-ID', {
             style: 'currency',
             currency: 'IDR',
@@ -278,14 +283,20 @@
             const subtotal = selected.reduce((sum, item) => sum + item.price * item.quantity, 0);
             const service = Math.round(subtotal * 0.05);
             const total = subtotal + service;
+            const hasPayment = paymentInputs.some((input) => input.checked);
 
             count.textContent = itemCount + ' item';
             subtotalEl.textContent = money(subtotal);
             serviceEl.textContent = money(service);
             totalEl.textContent = money(total);
             if (mobileTotalEl) mobileTotalEl.textContent = money(total);
-            submit.textContent = itemCount > 0 ? 'Buat Pesanan' : 'Pilih menu dulu';
-            submit.disabled = itemCount === 0;
+            submit.textContent = itemCount === 0 ? 'Pilih menu dulu' : (hasPayment ? 'Buat Pesanan' : 'Pilih pembayaran');
+            submit.disabled = itemCount === 0 || !hasPayment;
+            if (paymentRequired) {
+                paymentRequired.classList.toggle('text-emerald-700', hasPayment);
+                paymentRequired.classList.toggle('text-amber-800', !hasPayment);
+                paymentRequired.textContent = hasPayment ? 'Pembayaran sudah dipilih.' : 'Wajib dipilih sebelum pesanan dibuat.';
+            }
 
             list.replaceChildren();
             empty.classList.toggle('hidden', itemCount > 0);
@@ -331,6 +342,7 @@
             render();
         }));
         form.querySelectorAll('[data-variant-input]').forEach((input) => input.addEventListener('change', render));
+        paymentInputs.forEach((input) => input.addEventListener('change', render));
         function syncCheckoutDetails() {
             if (!checkoutDetails) return;
 

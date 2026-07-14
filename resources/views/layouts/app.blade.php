@@ -307,6 +307,15 @@
             const seconds = Number(document.body.dataset.autoRefresh || 0);
             let refreshInFlight = false;
             let lastRefreshAt = 0;
+            let lastUserInteractionAt = Date.now();
+
+            const markUserInteraction = () => {
+                lastUserInteractionAt = Date.now();
+            };
+
+            ['input', 'change', 'keydown', 'pointerdown', 'touchstart'].forEach((eventName) => {
+                document.addEventListener(eventName, markUserInteraction, { passive: true });
+            });
 
             const setRefreshStatus = (message, tone = 'ready') => {
                 const refreshStatus = document.querySelector('[data-refresh-status]');
@@ -323,9 +332,15 @@
                 if (refreshInFlight) return false;
 
                 const active = document.activeElement;
-                const userIsEditing = isTypingElement(active) || isFormDirty() || sidebar?.dataset.open === 'true';
+                const detailsIsOpen = Array.from(document.querySelectorAll('main details[open]')).length > 0;
+                const userRecentlyInteracted = Date.now() - lastUserInteractionAt < 8000;
+                const userIsEditing = isTypingElement(active) || isFormDirty() || detailsIsOpen || sidebar?.dataset.open === 'true' || userRecentlyInteracted;
 
                 if (!force && (document.hidden || userIsEditing)) {
+                    if (userIsEditing) {
+                        setRefreshStatus('Sync ditunda');
+                    }
+
                     return false;
                 }
 
