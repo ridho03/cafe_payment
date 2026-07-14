@@ -83,7 +83,8 @@
     }
 
     .pc-card {
-        @apply rounded-lg border border-amber-100/80 bg-gradient-to-br from-white via-amber-50/35 to-emerald-50/25 shadow-[0_18px_50px_rgba(69,36,14,0.10)] backdrop-blur;
+        @apply min-w-0 rounded-lg border border-amber-100/80 bg-gradient-to-br from-white via-amber-50/35 to-emerald-50/25 shadow-[0_18px_50px_rgba(69,36,14,0.10)] backdrop-blur;
+        overflow-wrap: anywhere;
     }
 
     .pc-card-muted {
@@ -95,11 +96,11 @@
     }
 
     .pc-title {
-        @apply mt-1 font-display text-3xl leading-tight text-stone-950 sm:text-4xl;
+        @apply mt-1 max-w-full break-words font-display text-3xl leading-tight text-stone-950 sm:text-4xl;
     }
 
     .pc-subtle {
-        @apply text-sm leading-5 text-stone-600;
+        @apply max-w-full break-words text-sm leading-5 text-stone-600;
     }
 
     .pc-button-primary {
@@ -111,7 +112,7 @@
     }
 
     .pc-input {
-        @apply mt-1 min-h-11 w-full rounded-lg border border-amber-200 bg-white/95 px-3 text-base text-stone-950 shadow-sm shadow-amber-900/5 transition focus:border-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-800/20;
+        @apply mt-1 min-h-11 w-full min-w-0 rounded-lg border border-amber-200 bg-white/95 px-3 text-base text-stone-950 shadow-sm shadow-amber-900/5 transition focus:border-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-800/20;
     }
 
     .pc-label {
@@ -119,7 +120,7 @@
     }
 
     .pc-badge {
-        @apply inline-flex min-h-8 items-center rounded-lg px-3 py-1 text-xs font-extrabold;
+        @apply inline-flex min-h-8 max-w-full items-center rounded-lg px-3 py-1 text-center text-xs font-extrabold break-words;
     }
 
     .pc-list-chip {
@@ -135,7 +136,11 @@
     }
 
     .pc-brand-mark {
-        @apply grid size-11 shrink-0 place-items-center rounded-lg bg-stone-950 text-amber-100 shadow-[0_12px_28px_rgba(38,19,7,0.28)];
+        @apply grid size-11 shrink-0 place-items-center rounded-lg border border-amber-100 bg-white p-1 shadow-[0_12px_28px_rgba(38,19,7,0.18)];
+    }
+
+    .pc-brand-logo {
+        @apply h-full w-full object-contain;
     }
 
     .pc-soft-panel {
@@ -143,7 +148,12 @@
     }
 
     .pc-stat {
-        @apply relative overflow-hidden rounded-lg border border-amber-100/80 bg-gradient-to-br from-white via-amber-50/45 to-white p-4 shadow-[0_18px_50px_rgba(69,36,14,0.10)] backdrop-blur;
+        @apply relative min-w-0 overflow-hidden rounded-lg border border-amber-100/80 bg-gradient-to-br from-white via-amber-50/45 to-white p-4 shadow-[0_18px_50px_rgba(69,36,14,0.10)] backdrop-blur;
+    }
+
+    .pc-wrap {
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     .pc-stat::before {
@@ -165,6 +175,7 @@
 
     .pc-table-head {
         @apply border-b border-amber-100 bg-amber-50/60 text-sm font-extrabold text-stone-600;
+        overflow-wrap: anywhere;
     }
 
     .pc-status-new {

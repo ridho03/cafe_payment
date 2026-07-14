@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Dashboard Admin')
-@section('auto_refresh', '30')
+@section('auto_refresh', '8')
 @section('order_signal', $orders->map(fn ($order) => $order->id.':'.$order->status.':'.$order->payment_status.':'.optional($order->updated_at)->timestamp)->implode('|'))
 
 @section('content')
@@ -19,6 +19,19 @@
             Kelola QR Meja
         </a>
     </div>
+
+    @if ($currentCafe && ($currentCafe->expiresSoon() || $currentCafe->isPastActiveUntil() || $currentCafe->status === 'expired'))
+        <section class="pc-card mt-5 border-amber-300 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-sm font-extrabold text-amber-900">Masa aktif cafe</p>
+                    <h2 class="pc-wrap mt-1 font-bold text-stone-950">{{ $currentCafe->name }}</h2>
+                    <p class="pc-subtle mt-1">Hubungi Super Admin untuk memperpanjang masa aktif cafe.</p>
+                </div>
+                <span class="pc-badge {{ $currentCafe->expiryBadgeClass() }}">{{ $currentCafe->expiryLabel() }}</span>
+            </div>
+        </section>
+    @endif
 
     <section class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-label="Ringkasan">
         <div class="pc-stat">

@@ -25,6 +25,17 @@ class AuthController extends Controller
                 ->onlyInput('email');
         }
 
+        if ($request->user()->is_active === false) {
+            Auth::logout();
+
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()
+                ->withErrors(['email' => 'Akun ini sedang nonaktif. Hubungi Super Admin.'])
+                ->onlyInput('email');
+        }
+
         $request->session()->regenerate();
 
         return redirect()->intended($this->homeForRole($request->user()->role));
@@ -43,6 +54,7 @@ class AuthController extends Controller
     private function homeForRole(string $role): string
     {
         return match ($role) {
+            'developer', 'super_admin' => route('super-admin.dashboard'),
             'cashier' => route('cashier.orders'),
             'kitchen' => route('kitchen.orders'),
             default => route('admin.dashboard'),

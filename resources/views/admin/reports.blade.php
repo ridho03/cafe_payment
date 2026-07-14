@@ -62,6 +62,19 @@
         </div>
     </section>
 
+    <section class="mt-5 grid gap-3 sm:grid-cols-2" aria-label="Ringkasan metode pembayaran">
+        <div class="pc-stat">
+            <p class="pc-subtle">Total Cash</p>
+            <p class="mt-2 text-2xl font-extrabold tabular-nums text-stone-950">{{ $format($paymentMethodSummary['cash']['revenue']) }}</p>
+            <p class="mt-1 text-xs font-bold text-stone-500">{{ $paymentMethodSummary['cash']['orders_count'] }} order lunas</p>
+        </div>
+        <div class="pc-stat">
+            <p class="pc-subtle">Total Cashless</p>
+            <p class="mt-2 text-2xl font-extrabold tabular-nums text-emerald-700">{{ $format($paymentMethodSummary['cashless']['revenue']) }}</p>
+            <p class="mt-1 text-xs font-bold text-stone-500">{{ $paymentMethodSummary['cashless']['orders_count'] }} order lunas</p>
+        </div>
+    </section>
+
     <div class="mt-5 grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
         <section class="pc-card overflow-hidden">
             <div class="pc-table-head px-4 py-3">
@@ -108,7 +121,7 @@
         </section>
     </div>
 
-    <div class="mt-5 grid gap-5 lg:grid-cols-2">
+    <div class="mt-5 grid gap-5 lg:grid-cols-3">
         <section class="pc-card overflow-hidden">
             <div class="pc-table-head px-4 py-3">
                 <h2 class="font-bold text-stone-950">Status pesanan</h2>
@@ -141,6 +154,27 @@
                     </div>
                 @empty
                     <p class="p-4 text-sm font-semibold text-stone-500">Belum ada data pembayaran.</p>
+                @endforelse
+            </div>
+        </section>
+
+        <section class="pc-card overflow-hidden">
+            <div class="pc-table-head px-4 py-3">
+                <h2 class="font-bold text-stone-950">Metode pembayaran</h2>
+            </div>
+            <div class="divide-y divide-amber-100">
+                @forelse ($paymentMethodBreakdown as $payment)
+                    <div class="flex items-center justify-between gap-3 p-4">
+                        <div>
+                            <span class="pc-badge border border-amber-200 bg-white text-amber-950">
+                                {{ (new \App\Models\Order(['payment_method' => $payment->payment_method]))->paymentMethodLabel() }}
+                            </span>
+                            <p class="pc-subtle mt-1">{{ $payment->orders_count }} order lunas</p>
+                        </div>
+                        <span class="font-extrabold tabular-nums text-emerald-700">{{ $format($payment->revenue) }}</span>
+                    </div>
+                @empty
+                    <p class="p-4 text-sm font-semibold text-stone-500">Belum ada pembayaran lunas.</p>
                 @endforelse
             </div>
         </section>

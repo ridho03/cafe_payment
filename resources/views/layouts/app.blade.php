@@ -4,25 +4,39 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', config('app.name'))</title>
+    <link rel="icon" type="image/png" href="{{ $appLogoUrl }}">
+    <link rel="apple-touch-icon" href="{{ $appLogoUrl }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 @php
-    $isAppShell = request()->is('admin*') || request()->is('cashier*') || request()->is('kitchen*');
+    $isAppShell = request()->is('admin*') || request()->is('super-admin*') || request()->is('cashier*') || request()->is('kitchen*');
     $autoRefreshSeconds = (int) trim($__env->yieldContent('auto_refresh', '0'));
     $orderSignal = trim($__env->yieldContent('order_signal', ''));
     $orderSignalKey = trim($__env->yieldContent('order_signal_key', '')) ?: request()->path();
     $role = auth()->user()->role ?? 'admin';
+    $isSuperAdminArea = request()->is('super-admin*') && auth()->user()?->isSuperAdmin();
+    $shellBrandName = $isSuperAdminArea ? 'Super Admin' : $panelBrandName;
+    $shellBrandSubtitle = $isSuperAdminArea ? 'Panel penyedia aplikasi' : 'Order QR, kasir, dan dapur';
     $homeRoute = match ($role) {
+        'developer', 'super_admin' => 'super-admin.dashboard',
         'cashier' => 'cashier.orders',
         'kitchen' => 'kitchen.orders',
         default => 'admin.dashboard',
     };
     $nav = [];
 
-    if (auth()->user()?->hasRole('admin', 'developer')) {
+    if (auth()->user()?->isSuperAdmin()) {
+        $nav = [
+            ['label' => 'Super Admin', 'route' => 'super-admin.dashboard'],
+            ['label' => 'Kelola Cafe', 'route' => 'super-admin.cafes'],
+            ['label' => 'Manajemen Akun', 'route' => 'super-admin.accounts'],
+            ['label' => 'Midtrans Cafe', 'route' => 'super-admin.midtrans'],
+            ['label' => 'Teknis', 'route' => 'super-admin.technical'],
+        ];
+    } elseif (auth()->user()?->hasRole('admin')) {
         $nav = [
             ['label' => 'Dashboard', 'route' => 'admin.dashboard'],
             ['label' => 'Admin Pesanan', 'route' => 'admin.orders'],
@@ -32,13 +46,10 @@
             ['label' => 'Menu', 'route' => 'admin.menu'],
             ['label' => 'Meja QR', 'route' => 'admin.tables'],
         ];
-
-        if (auth()->user()?->hasRole('developer')) {
-            $nav[] = ['label' => 'Maintenance', 'route' => 'admin.maintenance'];
-        }
     } elseif (auth()->user()?->hasRole('cashier')) {
         $nav = [
             ['label' => 'Kasir', 'route' => 'cashier.orders'],
+            ['label' => 'Laporan', 'route' => 'cashier.reports'],
         ];
     } elseif (auth()->user()?->hasRole('kitchen')) {
         $nav = [
@@ -62,13 +73,11 @@
             </button>
             <a href="{{ route($homeRoute) }}" class="pc-focus-link flex min-h-11 min-w-0 items-center gap-3">
                 <span class="pc-brand-mark size-10">
-                    <svg class="size-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M4 10h16M6 10v9h12v-9M8 6h8l2 4H6l2-4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                    <img src="{{ $appLogoUrl }}" alt="Logo {{ config('app.name') }}" class="pc-brand-logo">
                 </span>
                 <span class="min-w-0">
-                    <span class="block truncate font-display text-lg leading-5 text-stone-950">Payment Cafe</span>
-                    <span class="block truncate text-xs font-bold text-stone-500">Order QR, kasir, dan dapur</span>
+                    <span class="block truncate font-display text-lg leading-5 text-stone-950">{{ $shellBrandName }}</span>
+                    <span class="block truncate text-xs font-bold text-stone-500">{{ $shellBrandSubtitle }}</span>
                 </span>
             </a>
         </header>
@@ -78,14 +87,12 @@
         <aside id="admin-sidebar" data-sidebar class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r border-amber-100 bg-[linear-gradient(180deg,#fff7ed_0%,#ffffff_38%,#f0fdf4_100%)] shadow-2xl shadow-stone-950/10 backdrop-blur-xl transition-transform duration-200 ease-out lg:translate-x-0 lg:shadow-none">
             <div class="flex min-h-20 items-center justify-between gap-3 border-b border-amber-100 bg-gradient-to-br from-stone-950 via-amber-950 to-emerald-950 px-4 text-amber-50">
                 <a href="{{ route($homeRoute) }}" class="pc-focus-link flex min-h-11 min-w-0 items-center gap-3">
-                    <span class="grid size-11 shrink-0 place-items-center rounded-lg bg-amber-100 text-stone-950 shadow-[0_12px_28px_rgba(0,0,0,0.22)]">
-                        <svg class="size-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M4 10h16M6 10v9h12v-9M8 6h8l2 4H6l2-4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
+                    <span class="pc-brand-mark">
+                        <img src="{{ $appLogoUrl }}" alt="Logo {{ config('app.name') }}" class="pc-brand-logo">
                     </span>
                     <span class="min-w-0">
-                        <span class="block truncate font-display text-xl leading-5 text-amber-50">Payment Cafe</span>
-                        <span class="block truncate text-xs font-bold text-amber-100/75">Premium cafe ops</span>
+                        <span class="block truncate font-display text-xl leading-5 text-amber-50">{{ $shellBrandName }}</span>
+                        <span class="block truncate text-xs font-bold text-amber-100/75">{{ $isSuperAdminArea ? 'Developer tools' : 'Premium cafe ops' }}</span>
                     </span>
                 </a>
                 <button type="button" data-sidebar-close class="grid size-10 place-items-center rounded-lg text-amber-100 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-100 lg:hidden" aria-label="Tutup navigasi">
@@ -110,7 +117,7 @@
 
                 @if ($autoRefreshSeconds > 0)
                     <div class="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900">
-                        Auto refresh aktif tiap {{ $autoRefreshSeconds }} detik.
+                        Sinkron otomatis tiap {{ $autoRefreshSeconds }} detik.
                     </div>
                 @endif
 
@@ -129,7 +136,7 @@
 
         <header class="fixed left-72 right-0 top-0 z-20 hidden min-h-20 items-center justify-between gap-4 border-b border-amber-100/80 bg-white/90 px-8 shadow-sm shadow-amber-900/5 backdrop-blur-xl lg:flex">
             <div>
-                <p class="text-xs font-extrabold uppercase tracking-normal text-amber-900">Panel operasional</p>
+                <p class="text-xs font-extrabold uppercase tracking-normal text-amber-900">{{ $isSuperAdminArea ? 'Panel super admin' : 'Panel operasional' }}</p>
                 <h1 class="font-display text-2xl leading-tight text-stone-950">{{ $activeNav['label'] ?? trim($__env->yieldContent('title', config('app.name'))) }}</h1>
             </div>
             <div class="flex items-center gap-2">
@@ -139,7 +146,7 @@
                 </div>
                 @if ($autoRefreshSeconds > 0)
                     <div class="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-extrabold text-emerald-900">
-                        Refresh {{ $autoRefreshSeconds }}d
+                        Sync {{ $autoRefreshSeconds }}d
                     </div>
                 @endif
                 <button type="button" data-sound-toggle class="inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-extrabold text-amber-950 shadow-sm transition hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-800">
@@ -154,8 +161,20 @@
         'pt-16 lg:pl-72 lg:pt-20' => $isAppShell,
     ])>
         @if ($isAppShell && $autoRefreshSeconds > 0)
-            <div class="fixed bottom-3 right-3 z-20 hidden rounded-lg border border-emerald-100 bg-white/90 px-3 py-2 text-xs font-bold text-emerald-900 shadow-lg shadow-stone-950/10 backdrop-blur sm:block">
-                Auto refresh {{ $autoRefreshSeconds }}d
+            <div data-refresh-status class="fixed bottom-3 right-3 z-20 hidden rounded-lg border border-emerald-100 bg-white/90 px-3 py-2 text-xs font-bold text-emerald-900 shadow-lg shadow-stone-950/10 backdrop-blur sm:block">
+                Sync background {{ $autoRefreshSeconds }}d
+            </div>
+        @endif
+
+        @if ($isAppShell && $impersonator)
+            <div class="mx-auto mt-4 max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950 shadow-sm">
+                    <span>Mode cek cafe aktif. Kamu sedang masuk sebagai {{ auth()->user()->name }}.</span>
+                    <form method="POST" action="{{ route('impersonation.stop') }}">
+                        @csrf
+                        <button class="pc-button-secondary min-h-10 px-3 py-1">Kembali ke Super Admin</button>
+                    </form>
+                </div>
             </div>
         @endif
 
@@ -258,8 +277,10 @@
             });
             updateSoundButtons();
 
-            const signal = document.body.dataset.orderSignal || '';
-            if (signal) {
+            const processSignal = () => {
+                const signal = document.body.dataset.orderSignal || '';
+                if (!signal) return;
+
                 const signalKey = `paymentCafeSignal:${document.body.dataset.orderSignalKey || location.pathname}`;
                 const previousSignal = storage.get(signalKey);
 
@@ -268,28 +289,135 @@
                 }
 
                 storage.set(signalKey, signal);
-            }
+            };
+            processSignal();
 
-            const forms = Array.from(document.querySelectorAll('form'));
             const formSnapshots = new WeakMap();
+            const currentForms = () => Array.from(document.querySelectorAll('main form'));
             const formValue = (form) => new URLSearchParams(new FormData(form)).toString();
-            forms.forEach((form) => formSnapshots.set(form, formValue(form)));
+            const snapshotForms = () => currentForms().forEach((form) => formSnapshots.set(form, formValue(form)));
+            snapshotForms();
 
-            const isFormDirty = () => forms.some((form) => formSnapshots.get(form) !== formValue(form));
+            const isTypingElement = (element) => {
+                if (!element) return false;
+
+                return ['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName) || element.isContentEditable;
+            };
+            const isFormDirty = () => currentForms().some((form) => formSnapshots.get(form) !== formValue(form));
             const seconds = Number(document.body.dataset.autoRefresh || 0);
+            let refreshInFlight = false;
+            let lastRefreshAt = 0;
 
-            if (seconds > 0) {
-                const isUserBusy = () => {
-                    const active = document.activeElement;
-                    const typing = active && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName);
+            const setRefreshStatus = (message, tone = 'ready') => {
+                const refreshStatus = document.querySelector('[data-refresh-status]');
+                if (!refreshStatus) return;
 
-                    return document.hidden || typing || isFormDirty() || sidebar?.dataset.open === 'true';
+                refreshStatus.textContent = message;
+                refreshStatus.classList.toggle('border-emerald-100', tone !== 'error');
+                refreshStatus.classList.toggle('text-emerald-900', tone !== 'error');
+                refreshStatus.classList.toggle('border-red-100', tone === 'error');
+                refreshStatus.classList.toggle('text-red-800', tone === 'error');
+            };
+
+            const refreshCurrentPage = async ({ force = false } = {}) => {
+                if (refreshInFlight) return false;
+
+                const active = document.activeElement;
+                const userIsEditing = isTypingElement(active) || isFormDirty() || sidebar?.dataset.open === 'true';
+
+                if (!force && (document.hidden || userIsEditing)) {
+                    return false;
+                }
+
+                refreshInFlight = true;
+                setRefreshStatus('Sinkron...');
+
+                try {
+                    const response = await fetch(window.location.href, {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-Payment-Cafe-Refresh': '1',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    if (response.redirected && response.url && response.url !== window.location.href) {
+                        window.location.href = response.url;
+                        return true;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const html = await response.text();
+                    const parser = new DOMParser();
+                    const nextDocument = parser.parseFromString(html, 'text/html');
+                    const nextMain = nextDocument.querySelector('#main');
+                    const currentMain = document.querySelector('#main');
+
+                    if (!nextMain || !currentMain) {
+                        throw new Error('Konten tidak lengkap');
+                    }
+
+                    document.title = nextDocument.title || document.title;
+                    document.body.dataset.autoRefresh = nextDocument.body.dataset.autoRefresh || document.body.dataset.autoRefresh;
+                    document.body.dataset.orderSignal = nextDocument.body.dataset.orderSignal || '';
+                    document.body.dataset.orderSignalKey = nextDocument.body.dataset.orderSignalKey || document.body.dataset.orderSignalKey;
+                    currentMain.innerHTML = nextMain.innerHTML;
+                    snapshotForms();
+                    processSignal();
+
+                    lastRefreshAt = Date.now();
+                    setRefreshStatus(`Tersinkron ${new Date(lastRefreshAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`);
+
+                    return true;
+                } catch (error) {
+                    setRefreshStatus('Sync gagal', 'error');
+                    return false;
+                } finally {
+                    refreshInFlight = false;
+                }
+            };
+
+            window.PaymentCafeRefresh = {
+                refreshNow: () => refreshCurrentPage({ force: true }),
+            };
+
+            document.addEventListener('click', async (event) => {
+                const payButton = event.target.closest('[data-midtrans-pay]');
+                if (!payButton || !window.snap) return;
+
+                const syncUrl = payButton.dataset.syncUrl;
+                const snapToken = payButton.dataset.snapToken;
+
+                if (!syncUrl || !snapToken) return;
+
+                const syncMidtransStatus = async () => {
+                    await fetch(syncUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': @json(csrf_token()),
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    await refreshCurrentPage({ force: true });
                 };
 
+                window.snap.pay(snapToken, {
+                    onSuccess: syncMidtransStatus,
+                    onPending: syncMidtransStatus,
+                    onError: syncMidtransStatus,
+                    onClose: syncMidtransStatus,
+                });
+            });
+
+            if (seconds > 0) {
                 window.setInterval(() => {
-                    if (!isUserBusy()) {
-                        window.location.reload();
-                    }
+                    refreshCurrentPage();
                 }, seconds * 1000);
             }
         })();

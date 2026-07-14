@@ -8,9 +8,7 @@
         <div class="p-6 sm:p-10">
             <div class="flex items-center gap-3">
                 <span class="pc-brand-mark">
-                    <svg class="size-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M4 10h16M6 10v9h12v-9M8 6h8l2 4H6l2-4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                    <img src="{{ $appLogoUrl }}" alt="Logo {{ config('app.name') }}" class="pc-brand-logo">
                 </span>
                 <div>
                     <p class="pc-kicker">Payment Cafe</p>

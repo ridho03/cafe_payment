@@ -40,7 +40,7 @@
             <h2 class="font-bold text-stone-950">Catatan aman</h2>
             <p class="pc-subtle mt-2">Jangan berikan akses maintenance ke admin cafe, kasir, atau dapur. Simpan backup SQL di tempat aman.</p>
             <div class="mt-4 rounded-lg border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-800">
-                Ganti password demo sebelum production.
+                Ganti password bawaan sebelum digunakan untuk transaksi.
             </div>
         </article>
     </section>

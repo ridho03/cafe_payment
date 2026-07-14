@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasPublicId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
-    use HasFactory;
+    use HasFactory, HasPublicId;
 
     public const STATUS_FLOW = [
         'new' => 'Baru',
@@ -27,8 +28,15 @@ class Order extends Model
         'refunded' => 'Refund',
     ];
 
+    public const PAYMENT_METHODS = [
+        'cash' => 'Cash',
+        'midtrans_snap' => 'Cashless',
+        'demo_qris' => 'QRIS',
+    ];
+
     protected $fillable = [
         'cafe_table_id',
+        'public_id',
         'code',
         'customer_name',
         'customer_phone',
@@ -71,6 +79,14 @@ class Order extends Model
     public function paymentLabel(): string
     {
         return self::PAYMENT_FLOW[$this->payment_status] ?? ucfirst($this->payment_status);
+    }
+
+    public function paymentMethodLabel(): string
+    {
+        return self::PAYMENT_METHODS[$this->payment_method] ?? str($this->payment_method)
+            ->replace(['_', '-'], ' ')
+            ->title()
+            ->toString();
     }
 
     public function statusBadgeClass(): string

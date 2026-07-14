@@ -1,21 +1,23 @@
 @extends('layouts.app')
 
 @section('title', 'Status ' . $order->code)
-@section('auto_refresh', '10')
+@section('auto_refresh', '4')
 @section('order_signal_key', 'customer-status-'.$order->id)
 @section('order_signal', $order->id.':'.$order->status.':'.$order->payment_status.':'.optional($order->updated_at)->timestamp)
 
 @section('content')
 @php
     $format = fn ($amount) => 'Rp ' . number_format($amount, 0, ',', '.');
-    $midtransClientKey = config('midtrans.client_key');
-    $midtransReady = filled($midtransClientKey) && filled(config('midtrans.server_key'));
-    $snapUrl = config('midtrans.is_production')
+    $midtransSetting = $order->table->cafe?->midtransSetting;
+    $midtransClientKey = $midtransSetting?->client_key;
+    $midtransReady = $midtransSetting?->is_integrated && filled($midtransClientKey) && filled($midtransSetting?->server_key);
+    $snapUrl = $midtransSetting?->mode === 'production'
         ? 'https://app.midtrans.com/snap/snap.js'
         : 'https://app.sandbox.midtrans.com/snap/snap.js';
     $isPaid = $order->payment_status === 'paid';
     $isFailed = $order->payment_status === 'failed';
     $isRefunded = $order->payment_status === 'refunded';
+    $usesMidtrans = $order->payment_method === 'midtrans_snap';
     $steps = [
         [
             'label' => 'Pesanan',
@@ -25,7 +27,7 @@
         ],
         [
             'label' => 'Bayar',
-            'description' => $isPaid ? 'Pembayaran lunas' : ($order->midtrans_snap_token ? 'Menunggu pembayaran' : 'Siapkan pembayaran'),
+            'description' => $isPaid ? 'Pembayaran lunas' : ($usesMidtrans ? 'Bayar cashless' : 'Bayar di kasir'),
             'done' => $isPaid,
             'active' => ! $isPaid && ! $isFailed && ! $isRefunded,
         ],
@@ -53,9 +55,11 @@
         'paid' => 'Pembayaran diterima. Pesanan kamu sudah masuk ke alur dapur.',
         'failed' => 'Pembayaran gagal. Kamu bisa membuat pesanan baru atau minta bantuan kasir.',
         'refunded' => 'Pembayaran sudah direfund.',
-        default => $order->midtrans_snap_token
-            ? 'Token pembayaran sudah siap. Klik Bayar dengan Midtrans untuk membuka Snap.'
-            : 'Klik Siapkan Pembayaran Midtrans untuk membuat token pembayaran.',
+        default => $order->payment_method === 'cash'
+            ? 'Silakan bayar cash di kasir. Setelah kasir menandai lunas, pesanan masuk ke alur dapur.'
+            : ($order->midtrans_snap_token
+            ? 'Pembayaran cashless siap dibuka.'
+            : 'Pembayaran cashless belum siap. Coba tekan tombol di bawah atau minta bantuan kasir.'),
     };
 @endphp
 
@@ -64,9 +68,14 @@
         <div class="bg-stone-950 p-5 text-amber-50 sm:p-6">
             <p class="text-sm font-extrabold text-amber-200">Pesanan berhasil dibuat</p>
             <div class="mt-1 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h1 class="font-display text-3xl leading-tight sm:text-4xl">{{ $order->code }}</h1>
-                    <p class="mt-1 text-sm font-semibold text-amber-100/75">{{ $order->table->name }} &middot; {{ $order->created_at->format('H:i') }}</p>
+                <div class="flex min-w-0 items-center gap-3">
+                    <span class="pc-brand-mark size-14">
+                        <img src="{{ $appLogoUrl }}" alt="Logo {{ $order->table->cafe?->name ?: config('app.name') }}" class="pc-brand-logo">
+                    </span>
+                    <div class="min-w-0">
+                        <h1 class="font-display text-3xl leading-tight sm:text-4xl">{{ $order->code }}</h1>
+                        <p class="mt-1 text-sm font-semibold text-amber-100/75">{{ $order->table->name }} &middot; {{ $order->created_at->format('H:i') }}</p>
+                    </div>
                 </div>
                 <span class="pc-badge {{ $order->statusBadgeClass() }}">{{ $order->statusLabel() }}</span>
             </div>
@@ -136,46 +145,57 @@
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <p class="text-sm font-bold text-stone-700">Status bayar</p>
-                    <span class="pc-badge {{ $order->paymentBadgeClass() }} mt-2">{{ $order->paymentLabel() }}</span>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <span class="pc-badge {{ $order->paymentBadgeClass() }}">{{ $order->paymentLabel() }}</span>
+                        <span class="pc-badge border border-amber-200 bg-white text-amber-950">{{ $order->paymentMethodLabel() }}</span>
+                    </div>
                 </div>
                 @if ($order->midtrans_transaction_status)
                     <span class="pc-badge bg-white text-stone-700">
-                        Midtrans: {{ $order->midtrans_transaction_status }}
+                        Cashless: {{ $order->midtrans_transaction_status }}
                     </span>
                 @endif
             </div>
             <p class="mt-3 text-sm font-semibold text-stone-700">{{ $paymentMessage }}</p>
             @if ($order->payment_status !== 'paid')
                 <div class="mt-4 space-y-3">
-                    @if ($midtransReady && $order->midtrans_snap_token)
-                        <button id="pay-with-midtrans" type="button" class="pc-button-primary min-h-12 w-full text-base">
-                            Bayar dengan Midtrans
-                        </button>
-                        <form method="POST" action="{{ route('orders.midtrans-sync', $order) }}">
-                            @csrf
-                            <button class="pc-button-secondary w-full">
-                                Sinkronkan Status Pembayaran
+                    @if ($usesMidtrans)
+                        @if ($midtransReady && $order->midtrans_snap_token)
+                            <button id="pay-with-midtrans" type="button" data-midtrans-pay data-snap-token="{{ $order->midtrans_snap_token }}" data-sync-url="{{ route('orders.midtrans-sync', $order) }}" class="pc-button-primary min-h-12 w-full text-base">
+                                Bayar Cashless
                             </button>
-                        </form>
-                    @elseif ($midtransReady)
-                        <form method="POST" action="{{ route('orders.midtrans-token', $order) }}">
-                            @csrf
-                            <button class="pc-button-primary min-h-12 w-full text-base">
-                                Siapkan Pembayaran Midtrans
-                            </button>
-                        </form>
+                            <form method="POST" action="{{ route('orders.midtrans-sync', $order) }}">
+                                @csrf
+                                <button class="pc-button-secondary w-full">
+                                    Cek Status Pembayaran
+                                </button>
+                            </form>
+                        @elseif ($midtransReady)
+                            <form method="POST" action="{{ route('orders.midtrans-token', $order) }}">
+                                @csrf
+                                <button class="pc-button-primary min-h-12 w-full text-base">
+                                    Bayar Cashless
+                                </button>
+                            </form>
+                        @else
+                            <div class="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900">
+                                Cashless belum aktif untuk cafe ini. Silakan pilih cash atau hubungi kasir.
+                            </div>
+                        @endif
                     @else
                         <div class="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900">
-                            Midtrans belum aktif. Isi key sandbox di file .env untuk mencoba pembayaran asli sandbox.
+                            Tunjukkan kode order ini ke kasir untuk pembayaran cash.
                         </div>
                     @endif
 
-                    <form method="POST" action="{{ route('orders.simulate-payment', $order) }}">
-                        @csrf
-                        <button class="pc-button-secondary w-full">
-                            Bayar Demo / Tandai Lunas
-                        </button>
-                    </form>
+                    @if (app()->environment('local', 'testing'))
+                        <form method="POST" action="{{ route('orders.simulate-payment', $order) }}">
+                            @csrf
+                            <button class="pc-button-secondary w-full">
+                                Tandai Pembayaran Lunas
+                            </button>
+                        </form>
+                    @endif
                 </div>
             @endif
         </div>
@@ -184,42 +204,12 @@
             <a href="{{ route('customer.menu', ['table' => $order->table->code]) }}" class="pc-button-secondary">
                 Tambah pesanan lagi
             </a>
-            @if (! $isPaid && $order->midtrans_snap_token)
-                <form method="POST" action="{{ route('orders.midtrans-sync', $order) }}">
-                    @csrf
-                    <button class="pc-button-secondary">
-                        Cek ulang status
-                    </button>
-                </form>
-            @endif
         </div>
         </div>
     </section>
 </div>
 
-@if ($order->payment_status !== 'paid' && $midtransReady && $order->midtrans_snap_token)
+@if ($order->payment_status !== 'paid' && $usesMidtrans && $midtransReady && $order->midtrans_snap_token)
     <script src="{{ $snapUrl }}" data-client-key="{{ $midtransClientKey }}"></script>
-    <script>
-        async function syncMidtransStatus() {
-            await fetch(@json(route('orders.midtrans-sync', $order)), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': @json(csrf_token())
-                }
-            });
-
-            window.location.reload();
-        }
-
-        document.getElementById('pay-with-midtrans')?.addEventListener('click', function () {
-            window.snap.pay(@json($order->midtrans_snap_token), {
-                onSuccess: syncMidtransStatus,
-                onPending: syncMidtransStatus,
-                onError: syncMidtransStatus,
-                onClose: syncMidtransStatus
-            });
-        });
-    </script>
 @endif
 @endsection

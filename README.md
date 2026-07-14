@@ -8,7 +8,7 @@ Payment Cafe adalah aplikasi POS coffee shop berbasis Laravel 12. Fitur utama:
 - Kasir untuk menandai pembayaran lunas dan mencetak struk.
 - Kitchen display untuk memproses antrian dapur.
 - Admin untuk dashboard, menu, pesanan, QR meja, laporan, dan maintenance.
-- Integrasi Midtrans Snap opsional, dengan mode demo payment tetap tersedia.
+- Integrasi Midtrans Snap opsional untuk pembayaran cashless.
 - Laporan penjualan, export CSV, export SQL, auto-refresh, dan notifikasi suara untuk operasional.
 
 ## Kebutuhan
@@ -43,9 +43,9 @@ Untuk mode frontend development:
 npm run dev
 ```
 
-## Akun Demo
+## Akun Awal
 
-Catatan: akun demo tidak ditampilkan di halaman login agar tampilan production tetap aman dan rapi.
+Catatan: akun awal tidak ditampilkan di halaman login agar tampilan production tetap aman dan rapi.
 Ganti password semua akun sebelum dipakai transaksi real.
 
 ```text

@@ -39,9 +39,7 @@
         <div class="flex min-h-0 flex-col justify-center p-5 sm:p-8 lg:p-8 xl:p-10">
             <div class="flex items-center gap-3">
                 <span class="pc-brand-mark size-12">
-                    <svg class="size-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M4 10h16M6 10v9h12v-9M8 6h8l2 4H6l2-4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                    <img src="{{ $appLogoUrl }}" alt="Logo {{ config('app.name') }}" class="pc-brand-logo">
                 </span>
                 <div>
                     <p class="pc-kicker">{{ config('app.name') }}</p>

@@ -9,7 +9,10 @@ class AdminOrderController extends Controller
 {
     public function index()
     {
+        $cafeId = $this->currentCafeId();
+
         $orders = Order::with(['table', 'items'])
+            ->whereHas('table', fn ($query) => $query->where('cafe_id', $cafeId))
             ->latest()
             ->paginate(20);
 
@@ -18,6 +21,8 @@ class AdminOrderController extends Controller
 
     public function updateStatus(Request $request, Order $order)
     {
+        $this->ensureOrderBelongsToCurrentCafe($order);
+
         $validated = $request->validate([
             'status' => ['required', 'in:'.implode(',', array_keys(Order::STATUS_FLOW))],
         ]);
@@ -29,6 +34,8 @@ class AdminOrderController extends Controller
 
     public function updatePayment(Request $request, Order $order)
     {
+        $this->ensureOrderBelongsToCurrentCafe($order);
+
         $validated = $request->validate([
             'payment_status' => ['required', 'in:'.implode(',', array_keys(Order::PAYMENT_FLOW))],
         ]);
@@ -37,6 +44,10 @@ class AdminOrderController extends Controller
             'payment_status' => $validated['payment_status'],
             'paid_at' => $validated['payment_status'] === 'paid' ? now() : null,
         ];
+
+        if ($validated['payment_status'] === 'paid' && ! in_array($order->payment_method, ['midtrans_snap', 'cash'], true)) {
+            $updates['payment_method'] = 'cash';
+        }
 
         if ($validated['payment_status'] === 'paid' && $order->status === 'new') {
             $updates['status'] = 'accepted';

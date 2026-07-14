@@ -131,9 +131,16 @@
             color: #8a4b16;
             font-size: var(--brand-size);
             font-weight: 900;
-            letter-spacing: 0.08em;
             line-height: 1.1;
             text-transform: uppercase;
+            overflow-wrap: anywhere;
+        }
+        .qr-card img.logo {
+            display: block;
+            width: calc(var(--qr-size) * 0.34);
+            height: calc(var(--qr-size) * 0.34);
+            margin: 0 auto 2mm;
+            object-fit: contain;
         }
         .table-name {
             margin: 0;
@@ -195,6 +202,11 @@
         body[data-layout="label"] .brand {
             display: none;
         }
+        body[data-layout="label"] .qr-card img.logo {
+            width: 12mm;
+            height: 12mm;
+            margin-bottom: 1mm;
+        }
         body[data-layout="label"] .code-pill {
             min-height: 5mm;
             margin-top: 1.8mm;
@@ -250,7 +262,8 @@
             <section class="grid">
                 @foreach ($pageTables as $table)
                     <article class="qr-card">
-                        <p class="brand">{{ config('app.name') }}</p>
+                        <img src="{{ $appLogoUrl }}" alt="Logo {{ $table->cafe?->name ?: $panelBrandName }}" class="logo">
+                        <p class="brand">{{ $table->cafe?->name ?: $panelBrandName }}</p>
                         <h1 class="table-name">{{ $table->name }}</h1>
                         <p class="meta">{{ $table->capacity }} kursi</p>
                         <img src="{{ route('admin.tables.qr', $table) }}" alt="QR {{ $table->name }}">

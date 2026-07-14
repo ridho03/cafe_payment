@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Kasir')
-@section('auto_refresh', '15')
+@section('auto_refresh', '5')
 @section('order_signal', $orders->map(fn ($order) => $order->id.':'.$order->status.':'.$order->payment_status.':'.optional($order->updated_at)->timestamp)->implode('|'))
 
 @section('content')
@@ -15,11 +15,16 @@
             <p class="pc-kicker">Pembayaran dan struk</p>
             <h1 class="pc-title">Kasir</h1>
         </div>
-        <form method="GET" action="{{ route('cashier.orders') }}">
-            <button class="pc-button-secondary">
-                Refresh
-            </button>
-        </form>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ route('cashier.reports') }}" class="pc-button-secondary">
+                Laporan
+            </a>
+            <form method="GET" action="{{ route('cashier.orders') }}">
+                <button class="pc-button-secondary">
+                    Refresh
+                </button>
+            </form>
+        </div>
     </div>
 
     <section class="mt-6 grid gap-3 sm:grid-cols-3" aria-label="Ringkasan kasir">
@@ -51,6 +56,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <h2 class="font-bold text-stone-950">{{ $order->code }}</h2>
                             <span class="pc-badge border border-amber-200 bg-amber-50 text-amber-950">{{ $order->table->name }}</span>
+                            <span class="pc-badge {{ $order->statusBadgeClass() }}">{{ $order->statusLabel() }}</span>
                         </div>
                         <p class="pc-subtle mt-1">{{ $order->created_at->format('H:i') }} &middot; {{ $order->customer_name ?: 'Tanpa nama' }} &middot; {{ $order->items->sum('quantity') }} item</p>
                         <div class="mt-2 flex flex-wrap gap-2">
@@ -64,7 +70,7 @@
 
                     <div>
                         <span class="pc-badge {{ $order->paymentBadgeClass() }}">{{ $order->paymentLabel() }}</span>
-                        <span class="pc-badge {{ $order->statusBadgeClass() }} mt-2">{{ $order->statusLabel() }}</span>
+                        <span class="pc-badge border border-amber-200 bg-white text-amber-950 mt-2">{{ $order->paymentMethodLabel() }}</span>
                     </div>
 
                     <p class="pc-price">{{ $format($order->total) }}</p>

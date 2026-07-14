@@ -58,7 +58,7 @@
                         <span class="truncate">Buka menu</span>
                         <span class="shrink-0 text-xs text-stone-500">{{ $table->code }}</span>
                     </a>
-                    <div class="mt-3 grid gap-2">
+                    <div class="mt-3 grid gap-2 sm:grid-cols-2">
                         <a href="{{ route('admin.tables.qr', $table) }}" download="qr-{{ \Illuminate\Support\Str::slug($table->name) }}.svg" class="pc-button-secondary min-h-11 w-full whitespace-nowrap text-sm">
                             Export SVG
                         </a>
@@ -70,6 +70,37 @@
                             </button>
                         </form>
                     </div>
+                    <details class="mt-3 rounded-lg border border-amber-100 bg-amber-50/70 p-3">
+                        <summary class="cursor-pointer text-sm font-bold text-amber-900">Edit meja</summary>
+                        <form method="POST" action="{{ route('admin.tables.update', $table) }}" class="mt-3 grid gap-3 sm:grid-cols-2">
+                            @csrf
+                            @method('PATCH')
+                            <label class="pc-label">
+                                Nama meja
+                                <input name="name" required value="{{ $table->name }}" class="pc-input">
+                            </label>
+                            <label class="pc-label">
+                                Kapasitas
+                                <input name="capacity" required type="number" min="1" max="20" value="{{ $table->capacity }}" class="pc-input">
+                            </label>
+                            <div class="sm:col-span-2">
+                                <button class="pc-button-primary min-h-11 w-full">Simpan Meja</button>
+                            </div>
+                        </form>
+                        <div class="mt-3 border-t border-amber-100 pt-3">
+                            @if ($table->orders_count === 0)
+                                <form method="POST" action="{{ route('admin.tables.destroy', $table) }}" onsubmit="return confirm('Hapus {{ $table->name }}? QR meja ini tidak bisa dipakai lagi.')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500">
+                                        Hapus Meja
+                                    </button>
+                                </form>
+                            @else
+                                <p class="text-xs font-semibold leading-relaxed text-stone-500">Meja sudah punya histori order, jadi tidak bisa dihapus. Gunakan Nonaktifkan jika meja tidak dipakai lagi.</p>
+                            @endif
+                        </div>
+                    </details>
                 </article>
             @empty
                 <p class="pc-card p-4 text-sm text-stone-500">Belum ada meja. Buat meja pertama untuk mendapatkan QR.</p>

@@ -9,7 +9,10 @@ class KitchenController extends Controller
 {
     public function index()
     {
+        $cafeId = $this->currentCafeId();
+
         $orders = Order::with(['table', 'items'])
+            ->whereHas('table', fn ($query) => $query->where('cafe_id', $cafeId))
             ->where('payment_status', 'paid')
             ->whereIn('status', ['accepted', 'preparing', 'ready'])
             ->orderByRaw("CASE status WHEN 'accepted' THEN 1 WHEN 'preparing' THEN 2 WHEN 'ready' THEN 3 ELSE 4 END")
@@ -21,6 +24,8 @@ class KitchenController extends Controller
 
     public function updateStatus(Request $request, Order $order)
     {
+        $this->ensureOrderBelongsToCurrentCafe($order);
+
         $validated = $request->validate([
             'status' => ['required', 'in:preparing,ready,completed'],
         ]);

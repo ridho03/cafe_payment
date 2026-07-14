@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Pesanan')
-@section('auto_refresh', '15')
+@section('auto_refresh', '5')
 @section('order_signal', $orders->getCollection()->map(fn ($order) => $order->id.':'.$order->status.':'.$order->payment_status.':'.optional($order->updated_at)->timestamp)->implode('|'))
 
 @section('content')
@@ -28,6 +28,7 @@
                                 <span class="pc-badge border border-amber-200 bg-amber-50 text-amber-950">{{ $order->table->name }}</span>
                                 <span class="pc-badge {{ $order->statusBadgeClass() }}">{{ $order->statusLabel() }}</span>
                                 <span class="pc-badge {{ $order->paymentBadgeClass() }}">{{ $order->paymentLabel() }}</span>
+                                <span class="pc-badge border border-amber-200 bg-white text-amber-950">{{ $order->paymentMethodLabel() }}</span>
                             </div>
                             <p class="pc-subtle mt-1">{{ $order->created_at->format('d M Y H:i') }} &middot; {{ $order->customer_name ?: 'Tanpa nama' }}</p>
                             <div class="mt-3 grid gap-2 sm:grid-cols-2">

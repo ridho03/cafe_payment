@@ -7,15 +7,20 @@ use App\Models\MenuItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AdminMenuController extends Controller
 {
     public function index()
     {
+        $cafeId = $this->currentCafeId();
+
         $categories = MenuCategory::with(['items' => fn ($query) => $query
             ->withCount('orderItems')
             ->orderBy('sort_order')
             ->orderBy('name')])
+            ->withCount('items')
+            ->where('cafe_id', $cafeId)
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -23,8 +28,31 @@ class AdminMenuController extends Controller
         return view('admin.menu', compact('categories'));
     }
 
+    public function storeCategory(Request $request)
+    {
+        $cafeId = $this->currentCafeId();
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:60',
+                Rule::unique('menu_categories', 'name')->where('cafe_id', $cafeId),
+            ],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
+        ]);
+
+        MenuCategory::create([
+            'cafe_id' => $cafeId,
+            'name' => $validated['name'],
+            'sort_order' => $validated['sort_order'] ?? (MenuCategory::where('cafe_id', $cafeId)->max('sort_order') + 10),
+        ]);
+
+        return redirect()->route('admin.menu')->with('success', 'Kategori menu berhasil ditambahkan.');
+    }
+
     public function store(Request $request)
     {
+        $cafeId = $this->currentCafeId();
         $validated = $request->validate([
             'menu_category_id' => ['nullable', 'exists:menu_categories,id'],
             'category_name' => ['nullable', 'string', 'max:60'],
@@ -36,17 +64,23 @@ class AdminMenuController extends Controller
             'variants' => ['nullable', 'array'],
             'variants.*' => ['nullable', 'string', 'max:40'],
             'custom_variants' => ['nullable', 'string', 'max:255'],
+            'variant_price_deltas' => ['nullable', 'array'],
         ]);
 
         $categoryId = $validated['menu_category_id'] ?? null;
 
         if (! $categoryId) {
             $category = MenuCategory::firstOrCreate(
-                ['name' => ($validated['category_name'] ?? null) ?: 'Menu Baru'],
-                ['sort_order' => MenuCategory::max('sort_order') + 10]
+                [
+                    'cafe_id' => $cafeId,
+                    'name' => ($validated['category_name'] ?? null) ?: 'Menu Baru',
+                ],
+                ['sort_order' => MenuCategory::where('cafe_id', $cafeId)->max('sort_order') + 10]
             );
 
             $categoryId = $category->id;
+        } else {
+            abort_unless(MenuCategory::whereKey($categoryId)->where('cafe_id', $cafeId)->exists(), 403);
         }
 
         MenuItem::create([
@@ -55,7 +89,11 @@ class AdminMenuController extends Controller
             'description' => $validated['description'] ?? null,
             'price' => $validated['price'],
             'image_url' => $this->imageUrlFromRequest($request, $validated['image_url'] ?? null),
-            'variants' => MenuItem::normalizeVariants($validated['variants'] ?? [], $validated['custom_variants'] ?? null),
+            'variants' => MenuItem::normalizeVariantGroups(
+                $validated['variants'] ?? [],
+                $validated['custom_variants'] ?? null,
+                $validated['variant_price_deltas'] ?? []
+            ),
             'is_available' => true,
             'sort_order' => MenuItem::where('menu_category_id', $categoryId)->max('sort_order') + 10,
         ]);
@@ -65,6 +103,9 @@ class AdminMenuController extends Controller
 
     public function update(Request $request, MenuItem $menuItem)
     {
+        $this->ensureMenuItemBelongsToCurrentCafe($menuItem);
+        $cafeId = $this->currentCafeId();
+
         $validated = $request->validate([
             'menu_category_id' => ['required', 'exists:menu_categories,id'],
             'name' => ['required', 'string', 'max:100'],
@@ -76,7 +117,10 @@ class AdminMenuController extends Controller
             'variants' => ['nullable', 'array'],
             'variants.*' => ['nullable', 'string', 'max:40'],
             'custom_variants' => ['nullable', 'string', 'max:255'],
+            'variant_price_deltas' => ['nullable', 'array'],
         ]);
+
+        abort_unless(MenuCategory::whereKey($validated['menu_category_id'])->where('cafe_id', $cafeId)->exists(), 403);
 
         $imageUrl = $menuItem->image_url;
 
@@ -98,8 +142,12 @@ class AdminMenuController extends Controller
         }
 
         $variants = $request->has('variants') || $request->has('custom_variants')
-            ? MenuItem::normalizeVariants($validated['variants'] ?? [], $validated['custom_variants'] ?? null)
-            : $menuItem->availableVariants();
+            ? MenuItem::normalizeVariantGroups(
+                $validated['variants'] ?? [],
+                $validated['custom_variants'] ?? null,
+                $validated['variant_price_deltas'] ?? []
+            )
+            : $menuItem->availableVariantGroups();
 
         $menuItem->update([
             'menu_category_id' => $validated['menu_category_id'],
@@ -113,8 +161,32 @@ class AdminMenuController extends Controller
         return redirect()->route('admin.menu')->with('success', 'Menu berhasil diperbarui.');
     }
 
+    public function updateCategory(Request $request, MenuCategory $menuCategory)
+    {
+        $this->ensureMenuCategoryBelongsToCurrentCafe($menuCategory);
+        $cafeId = $this->currentCafeId();
+
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:60',
+                Rule::unique('menu_categories', 'name')
+                    ->where('cafe_id', $cafeId)
+                    ->ignore($menuCategory->id),
+            ],
+            'sort_order' => ['required', 'integer', 'min:0', 'max:65535'],
+        ]);
+
+        $menuCategory->update($validated);
+
+        return redirect()->route('admin.menu')->with('success', 'Kategori menu berhasil diperbarui.');
+    }
+
     public function toggle(MenuItem $menuItem)
     {
+        $this->ensureMenuItemBelongsToCurrentCafe($menuItem);
+
         $menuItem->update(['is_available' => ! $menuItem->is_available]);
 
         return redirect()->route('admin.menu')->with('success', 'Status menu berhasil diubah.');
@@ -122,12 +194,30 @@ class AdminMenuController extends Controller
 
     public function destroy(MenuItem $menuItem)
     {
+        $this->ensureMenuItemBelongsToCurrentCafe($menuItem);
+
         abort_if($menuItem->orderItems()->exists(), 422, 'Menu sudah pernah dipesan, ubah menjadi Habis agar histori transaksi tetap aman.');
 
         $this->deleteUploadedImage($menuItem->image_url);
         $menuItem->delete();
 
         return redirect()->route('admin.menu')->with('success', 'Menu berhasil dihapus.');
+    }
+
+    public function destroyCategory(MenuCategory $menuCategory)
+    {
+        $this->ensureMenuCategoryBelongsToCurrentCafe($menuCategory);
+
+        abort_if($menuCategory->items()->exists(), 422, 'Kategori masih berisi menu. Pindahkan atau hapus menu terlebih dahulu.');
+
+        $menuCategory->delete();
+
+        return redirect()->route('admin.menu')->with('success', 'Kategori menu berhasil dihapus.');
+    }
+
+    private function ensureMenuCategoryBelongsToCurrentCafe(MenuCategory $menuCategory): void
+    {
+        abort_unless(! $this->currentCafeId() || $menuCategory->cafe_id === $this->currentCafeId(), 403);
     }
 
     private function imageUrlFromRequest(Request $request, ?string $fallbackUrl): ?string

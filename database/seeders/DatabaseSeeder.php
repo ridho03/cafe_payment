@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Cafe;
 use App\Models\CafeTable;
 use App\Models\MenuCategory;
 use App\Models\MenuItem;
@@ -19,6 +20,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $defaultCafe = Cafe::firstOrCreate(
+            ['slug' => 'payment-cafe'],
+            [
+                'name' => config('app.name', 'Payment Cafe'),
+                'status' => 'active',
+                'active_from' => now()->toDateString(),
+            ]
+        );
+
         $developerEmail = env('DEVELOPER_EMAIL');
         $developerPassword = env('DEVELOPER_PASSWORD');
 
@@ -37,23 +47,26 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        $users->each(function (array $user) {
+        $users->each(function (array $user) use ($defaultCafe) {
             User::updateOrCreate(
                 ['email' => $user['email']],
                 [
                     'name' => $user['name'],
                     'role' => $user['role'],
+                    'cafe_id' => in_array($user['role'], ['admin', 'cashier', 'kitchen'], true) ? $defaultCafe->id : null,
+                    'is_active' => true,
                     'password' => Hash::make($user['password'] ?? 'password'),
                 ]
             );
         });
 
-        collect(range(1, 8))->each(function (int $number) {
+        collect(range(1, 8))->each(function (int $number) use ($defaultCafe) {
             $code = 'MEJA-'.str_pad((string) $number, 2, '0', STR_PAD_LEFT);
 
             CafeTable::updateOrCreate(
                 ['code' => $code],
                 [
+                    'cafe_id' => $defaultCafe->id,
                     'name' => 'Meja '.str_pad((string) $number, 2, '0', STR_PAD_LEFT),
                     'capacity' => $number <= 4 ? 2 : 4,
                     'is_active' => true,
@@ -85,7 +98,10 @@ class DatabaseSeeder extends Seeder
 
         foreach ($categories as $categoryName => $items) {
             $category = MenuCategory::updateOrCreate(
-                ['name' => $categoryName],
+                [
+                    'cafe_id' => $defaultCafe->id,
+                    'name' => $categoryName,
+                ],
                 ['sort_order' => $sort]
             );
 

@@ -6,15 +6,23 @@ use App\Models\CafeTable;
 use App\Models\MenuCategory;
 use App\Models\MenuItem;
 use App\Models\Order;
+use App\Services\MidtransSnapService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CustomerOrderController extends Controller
 {
+    public function __construct(private readonly MidtransSnapService $midtransSnap)
+    {
+    }
+
     public function show(CafeTable $table)
     {
+        $table->loadMissing('cafe.midtransSetting');
+
         abort_unless($table->is_active, 404);
 
         $categories = MenuCategory::query()
@@ -22,6 +30,7 @@ class CustomerOrderController extends Controller
                 ->where('is_available', true)
                 ->orderBy('sort_order')
                 ->orderBy('name')])
+            ->where('cafe_id', $table->cafe_id)
             ->whereHas('items', fn ($query) => $query->where('is_available', true))
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -32,6 +41,8 @@ class CustomerOrderController extends Controller
 
     public function store(Request $request, CafeTable $table)
     {
+        $table->loadMissing('cafe.midtransSetting');
+
         abort_unless($table->is_active, 404);
 
         $validated = $request->validate([
@@ -41,8 +52,10 @@ class CustomerOrderController extends Controller
             'items' => ['required', 'array'],
             'items.*' => ['nullable', 'integer', 'min:0', 'max:20'],
             'item_variants' => ['nullable', 'array'],
-            'item_variants.*' => ['nullable', 'string', 'max:40'],
+            'payment_method' => ['nullable', 'in:cash,midtrans_snap'],
         ]);
+
+        $validated['payment_method'] = $validated['payment_method'] ?? 'cash';
 
         $requestedItems = collect($validated['items'])
             ->map(fn ($quantity) => (int) $quantity)
@@ -55,6 +68,7 @@ class CustomerOrderController extends Controller
         }
 
         $menuItems = MenuItem::query()
+            ->whereHas('category', fn ($query) => $query->where('cafe_id', $table->cafe_id))
             ->whereIn('id', $requestedItems->keys())
             ->where('is_available', true)
             ->get()
@@ -66,10 +80,29 @@ class CustomerOrderController extends Controller
             ]);
         }
 
+        if ($validated['payment_method'] === 'midtrans_snap' && ! $this->midtransReady($table)) {
+            throw ValidationException::withMessages([
+                'payment_method' => 'Cashless belum aktif untuk cafe ini. Pilih Cash atau hubungi kasir.',
+            ]);
+        }
+
         $order = DB::transaction(function () use ($validated, $requestedItems, $menuItems, $table) {
-            $subtotal = $requestedItems
-                ->map(fn ($quantity, $itemId) => $menuItems[(int) $itemId]->price * $quantity)
-                ->sum();
+            $lineItems = $requestedItems
+                ->map(function ($quantity, $itemId) use ($menuItems, $validated) {
+                    $menuItem = $menuItems[(int) $itemId];
+                    $selection = $menuItem->resolveVariantSelection($validated['item_variants'][$itemId] ?? null);
+                    $unitPrice = $menuItem->price + $selection['price_delta'];
+
+                    return [
+                        'menu_item' => $menuItem,
+                        'quantity' => $quantity,
+                        'variant' => $selection['label'],
+                        'unit_price' => $unitPrice,
+                        'total' => $unitPrice * $quantity,
+                    ];
+                });
+
+            $subtotal = $lineItems->sum('total');
 
             $serviceFee = (int) round($subtotal * 0.05);
 
@@ -84,36 +117,48 @@ class CustomerOrderController extends Controller
                 'total' => $subtotal + $serviceFee,
                 'status' => 'new',
                 'payment_status' => 'unpaid',
-                'payment_method' => 'demo_qris',
+                'payment_method' => $validated['payment_method'],
             ]);
 
-            foreach ($requestedItems as $itemId => $quantity) {
-                $menuItem = $menuItems[(int) $itemId];
-                $variants = $menuItem->availableVariants();
-                $requestedVariant = $validated['item_variants'][$itemId] ?? null;
-                $variant = in_array($requestedVariant, $variants, true)
-                    ? $requestedVariant
-                    : ($variants[0] ?? null);
-
+            foreach ($lineItems as $lineItem) {
+                $menuItem = $lineItem['menu_item'];
                 $order->items()->create([
                     'menu_item_id' => $menuItem->id,
                     'name_snapshot' => $menuItem->name,
-                    'variant' => $variant,
-                    'price_snapshot' => $menuItem->price,
-                    'quantity' => $quantity,
-                    'total' => $menuItem->price * $quantity,
+                    'variant' => $lineItem['variant'],
+                    'price_snapshot' => $lineItem['unit_price'],
+                    'quantity' => $lineItem['quantity'],
+                    'total' => $lineItem['total'],
                 ]);
             }
 
             return $order;
         });
 
+        if ($order->payment_method === 'midtrans_snap') {
+            try {
+                $order->load(['items', 'table.cafe.midtransSetting']);
+                $this->midtransSnap->ensureSnapToken($order);
+
+                return redirect()->route('orders.status', $order);
+            } catch (\Throwable $exception) {
+                Log::error('Midtrans Snap token failed after checkout', [
+                    'order_id' => $order->id,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                return redirect()
+                    ->route('orders.status', $order)
+                    ->withErrors('Pembayaran cashless belum bisa dibuka. Coba tekan tombol Bayar Cashless atau hubungi kasir.');
+            }
+        }
+
         return redirect()->route('orders.status', $order);
     }
 
     public function status(Order $order)
     {
-        $order->load(['table', 'items']);
+        $order->load(['table.cafe.midtransSetting', 'items']);
 
         return view('customer.status', compact('order'));
     }
@@ -130,6 +175,13 @@ class CustomerOrderController extends Controller
 
         return redirect()
             ->route('orders.status', $order)
-            ->with('success', 'Pembayaran demo berhasil. Nanti tombol ini bisa diganti callback Midtrans/Xendit.');
+            ->with('success', 'Pembayaran berhasil ditandai lunas.');
+    }
+
+    private function midtransReady(CafeTable $table): bool
+    {
+        $setting = $table->cafe?->midtransSetting;
+
+        return $setting?->is_integrated && filled($setting->client_key) && filled($setting->server_key);
     }
 }

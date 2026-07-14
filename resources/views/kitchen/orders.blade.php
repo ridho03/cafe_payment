@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Dapur')
-@section('auto_refresh', '12')
+@section('auto_refresh', '4')
 @section('order_signal', $orders->map(fn ($order) => $order->id.':'.$order->status.':'.optional($order->updated_at)->timestamp)->implode('|'))
 
 @section('content')

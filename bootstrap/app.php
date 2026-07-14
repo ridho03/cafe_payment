@@ -16,6 +16,18 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureUserHasRole::class,
         ]);
 
+        $middleware->preventRequestsDuringMaintenance([
+            '/',
+            'up',
+            'login',
+            'logout',
+            'super-admin*',
+            'build/*',
+            'images/*',
+            'uploads/*',
+            'favicon.ico',
+        ]);
+
         $middleware->validateCsrfTokens(except: [
             'midtrans/notification',
         ]);

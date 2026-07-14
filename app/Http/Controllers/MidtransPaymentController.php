@@ -3,73 +3,51 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Services\MidtransSnapService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Midtrans\Config;
-use Midtrans\Snap;
 use Midtrans\Transaction;
 
 class MidtransPaymentController extends Controller
 {
+    public function __construct(private readonly MidtransSnapService $midtransSnap)
+    {
+    }
+
     public function createSnapToken(Order $order)
     {
+        $order->load(['items', 'table.cafe.midtransSetting']);
+
         if ($order->payment_status === 'paid') {
             return redirect()->route('orders.status', $order);
         }
 
-        if (! $this->isConfigured()) {
+        if ($order->payment_method !== 'midtrans_snap') {
             return redirect()
                 ->route('orders.status', $order)
-                ->withErrors('Isi MIDTRANS_SERVER_KEY dan MIDTRANS_CLIENT_KEY di file .env dulu.');
+                ->withErrors('Order ini memilih pembayaran cash. Minta kasir menandai lunas setelah pembayaran diterima.');
         }
 
-        $this->configureMidtrans();
-        $order->load(['items', 'table']);
+        if (! $this->midtransSnap->isConfigured($order)) {
+            return redirect()
+                ->route('orders.status', $order)
+                ->withErrors('Pembayaran cashless belum aktif untuk cafe ini.');
+        }
 
-        if (! $order->midtrans_order_id) {
-            $order->update([
-                'midtrans_order_id' => $order->code,
-                'payment_method' => 'midtrans_snap',
+        try {
+            $this->midtransSnap->ensureSnapToken($order);
+        } catch (\Throwable $exception) {
+            Log::error('Midtrans Snap token failed', [
+                'order_id' => $order->id,
+                'message' => $exception->getMessage(),
             ]);
+
+            return redirect()
+                ->route('orders.status', $order)
+                ->withErrors('Gagal membuka pembayaran cashless. Cek konfigurasi Server Key Midtrans.');
         }
 
-        if (! $order->midtrans_snap_token) {
-            $params = [
-                'transaction_details' => [
-                    'order_id' => $order->midtrans_order_id,
-                    'gross_amount' => $order->total,
-                ],
-                'customer_details' => [
-                    'first_name' => $order->customer_name ?: $order->table->name,
-                    'phone' => $order->customer_phone,
-                ],
-                'item_details' => $this->itemDetails($order),
-                'callbacks' => [
-                    'finish' => route('orders.status', $order),
-                    'unfinish' => route('orders.status', $order),
-                    'error' => route('orders.status', $order),
-                ],
-            ];
-
-            try {
-                $order->update([
-                    'midtrans_snap_token' => Snap::getSnapToken($params),
-                ]);
-            } catch (\Throwable $exception) {
-                Log::error('Midtrans Snap token failed', [
-                    'order_id' => $order->id,
-                    'message' => $exception->getMessage(),
-                ]);
-
-                return redirect()
-                    ->route('orders.status', $order)
-                    ->withErrors('Gagal membuat Snap token. Cek Server Key Midtrans sandbox kamu.');
-            }
-        }
-
-        return redirect()
-            ->route('orders.status', $order)
-            ->with('success', 'Snap token siap. Klik tombol Bayar dengan Midtrans.');
+        return redirect()->route('orders.status', $order);
     }
 
     public function notification(Request $request)
@@ -82,8 +60,9 @@ class MidtransPaymentController extends Controller
         }
 
         $order = Order::where('midtrans_order_id', $midtransOrderId)->firstOrFail();
+        $order->load('table.cafe.midtransSetting');
 
-        if (! $this->hasValidSignature($payload)) {
+        if (! $this->hasValidSignature($order, $payload)) {
             return response()->json(['message' => 'Invalid signature'], 403);
         }
 
@@ -94,19 +73,21 @@ class MidtransPaymentController extends Controller
 
     public function syncStatus(Order $order)
     {
+        $order->load('table.cafe.midtransSetting');
+
         if (! $order->midtrans_order_id) {
             return redirect()
                 ->route('orders.status', $order)
-                ->withErrors('Order ini belum punya transaksi Midtrans.');
+                ->withErrors('Order ini belum punya transaksi cashless.');
         }
 
-        if (! $this->isConfigured()) {
+        if (! $this->midtransSnap->isConfigured($order)) {
             return redirect()
                 ->route('orders.status', $order)
-                ->withErrors('Konfigurasi Midtrans belum lengkap.');
+                ->withErrors('Pembayaran cashless belum aktif untuk cafe ini.');
         }
 
-        $this->configureMidtrans();
+        $this->midtransSnap->configure($order);
 
         try {
             $payload = (array) Transaction::status($order->midtrans_order_id);
@@ -120,51 +101,19 @@ class MidtransPaymentController extends Controller
 
             return redirect()
                 ->route('orders.status', $order)
-                ->withErrors('Belum bisa mengambil status dari Midtrans. Coba beberapa detik lagi.');
+                ->withErrors('Belum bisa mengambil status pembayaran. Coba beberapa detik lagi.');
         }
 
         return redirect()
             ->route('orders.status', $order)
-            ->with('success', 'Status pembayaran sudah disinkronkan dari Midtrans.');
+            ->with('success', 'Status pembayaran sudah diperbarui.');
     }
 
-    private function configureMidtrans(): void
+    private function hasValidSignature(Order $order, array $payload): bool
     {
-        Config::$serverKey = config('midtrans.server_key');
-        Config::$isProduction = (bool) config('midtrans.is_production');
-        Config::$isSanitized = (bool) config('midtrans.is_sanitized');
-        Config::$is3ds = (bool) config('midtrans.is_3ds');
-    }
+        $serverKey = $order->table?->cafe?->midtransSetting?->server_key;
 
-    private function isConfigured(): bool
-    {
-        return filled(config('midtrans.server_key')) && filled(config('midtrans.client_key'));
-    }
-
-    private function itemDetails(Order $order): array
-    {
-        $items = $order->items->map(fn ($item) => [
-            'id' => 'menu-'.$item->id,
-            'price' => $item->price_snapshot,
-            'quantity' => $item->quantity,
-            'name' => str($item->name_snapshot)->limit(50)->toString(),
-        ])->values()->all();
-
-        if ($order->service_fee > 0) {
-            $items[] = [
-                'id' => 'service-fee',
-                'price' => $order->service_fee,
-                'quantity' => 1,
-                'name' => 'Biaya layanan',
-            ];
-        }
-
-        return $items;
-    }
-
-    private function hasValidSignature(array $payload): bool
-    {
-        if (! filled(config('midtrans.server_key')) || ! isset($payload['signature_key'])) {
+        if (! filled($serverKey) || ! isset($payload['signature_key'])) {
             return false;
         }
 
@@ -173,7 +122,7 @@ class MidtransPaymentController extends Controller
             ($payload['order_id'] ?? '').
             ($payload['status_code'] ?? '').
             ($payload['gross_amount'] ?? '').
-            config('midtrans.server_key')
+            $serverKey
         );
 
         return hash_equals($signature, $payload['signature_key']);

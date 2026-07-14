@@ -67,6 +67,13 @@
         .bold { font-weight: 700; }
         .item { margin-bottom: 8px; }
         .item-name { overflow-wrap: anywhere; }
+        .receipt-logo {
+            display: block;
+            width: {{ $paperWidth === 58 ? 18 : 22 }}mm;
+            height: {{ $paperWidth === 58 ? 18 : 22 }}mm;
+            margin: 0 auto 3mm;
+            object-fit: contain;
+        }
         @media print {
             html, body {
                 width: var(--receipt-width);
@@ -95,8 +102,15 @@
 
     <main class="receipt">
         <section class="center">
-            <h1 style="font-size:{{ $paperWidth === 58 ? 13 : 16 }}px;margin:0 0 4px;">{{ config('app.name') }}</h1>
-            <p class="muted" style="margin:0;">{{ $order->table->name }}</p>
+            <img src="{{ $appLogoUrl }}" alt="Logo {{ $cafe?->name ?: config('app.name') }}" class="receipt-logo">
+            <h1 style="font-size:{{ $paperWidth === 58 ? 13 : 16 }}px;margin:0 0 4px;overflow-wrap:anywhere;">{{ $cafe?->name ?: config('app.name') }}</h1>
+            @if ($cafe?->address)
+                <p class="muted" style="margin:0;overflow-wrap:anywhere;">{{ $cafe->address }}</p>
+            @endif
+            @if ($cafe?->contact_phone)
+                <p class="muted" style="margin:2px 0 0;overflow-wrap:anywhere;">{{ $cafe->contact_phone }}</p>
+            @endif
+            <p class="muted" style="margin:4px 0 0;">{{ $order->table->name }}</p>
         </section>
 
         <div class="line"></div>
@@ -116,7 +130,7 @@
             </div>
             <div class="row">
                 <span>Bayar</span>
-                <span>{{ $order->paymentLabel() }}</span>
+                <span>{{ $order->paymentLabel() }} - {{ $order->paymentMethodLabel() }}</span>
             </div>
         </section>
 

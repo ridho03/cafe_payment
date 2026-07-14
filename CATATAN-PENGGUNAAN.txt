@@ -4,8 +4,8 @@ CATATAN PENGGUNAAN - PAYMENT CAFE
 - Gunakan akun sesuai peran: developer, admin cafe, kasir, atau dapur.
 - Developer/penyedia aplikasi punya akses penuh termasuk Maintenance.
 - Admin cafe tidak punya akses ke Maintenance.
-- Akun demo tidak ditampilkan di halaman login agar aman untuk production.
-- Ganti semua password demo sebelum dipakai transaksi asli.
+- Akun awal tidak ditampilkan di halaman login agar aman untuk production.
+- Ganti semua password bawaan sebelum dipakai transaksi asli.
 
 2. QR Meja
 - Buka Admin > Meja.

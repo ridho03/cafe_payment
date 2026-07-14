@@ -13,8 +13,11 @@ class AdminReportController extends Controller
     public function index(Request $request)
     {
         [$from, $to] = $this->dateRange($request);
+        $cafeId = $this->currentCafeId();
 
-        $baseOrders = Order::query()->whereBetween('created_at', [$from, $to]);
+        $baseOrders = Order::query()
+            ->whereHas('table', fn ($query) => $query->where('cafe_id', $cafeId))
+            ->whereBetween('created_at', [$from, $to]);
         $paidOrders = (clone $baseOrders)->where('payment_status', 'paid');
 
         $summary = [
@@ -25,6 +28,8 @@ class AdminReportController extends Controller
             'service_fee' => (clone $paidOrders)->sum('service_fee'),
             'items_sold' => DB::table('order_items')
                 ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->join('cafe_tables', 'cafe_tables.id', '=', 'orders.cafe_table_id')
+                ->where('cafe_tables.cafe_id', $cafeId)
                 ->whereBetween('orders.created_at', [$from, $to])
                 ->where('orders.payment_status', 'paid')
                 ->sum('order_items.quantity'),
@@ -45,6 +50,29 @@ class AdminReportController extends Controller
             ->orderByDesc('total')
             ->get();
 
+        $paymentMethodBreakdown = (clone $paidOrders)
+            ->select('payment_method', DB::raw('COUNT(*) as orders_count'), DB::raw('SUM(total) as revenue'))
+            ->groupBy('payment_method')
+            ->orderByDesc('revenue')
+            ->get();
+
+        $paymentMethodSummary = [
+            'cash' => [
+                'label' => 'Cash',
+                'orders_count' => (int) $paymentMethodBreakdown->where('payment_method', 'cash')->sum('orders_count'),
+                'revenue' => (int) $paymentMethodBreakdown->where('payment_method', 'cash')->sum('revenue'),
+            ],
+            'cashless' => [
+                'label' => 'Cashless',
+                'orders_count' => (int) $paymentMethodBreakdown
+                    ->reject(fn ($payment) => $payment->payment_method === 'cash')
+                    ->sum('orders_count'),
+                'revenue' => (int) $paymentMethodBreakdown
+                    ->reject(fn ($payment) => $payment->payment_method === 'cash')
+                    ->sum('revenue'),
+            ],
+        ];
+
         $dailySales = (clone $paidOrders)
             ->select(DB::raw('DATE(created_at) as sale_date'), DB::raw('COUNT(*) as orders_count'), DB::raw('SUM(total) as revenue'))
             ->groupBy('sale_date')
@@ -53,11 +81,13 @@ class AdminReportController extends Controller
 
         $topItems = DB::table('order_items')
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->join('cafe_tables', 'cafe_tables.id', '=', 'orders.cafe_table_id')
             ->select(
                 'order_items.name_snapshot',
                 DB::raw('SUM(order_items.quantity) as quantity'),
                 DB::raw('SUM(order_items.total) as revenue')
             )
+            ->where('cafe_tables.cafe_id', $cafeId)
             ->whereBetween('orders.created_at', [$from, $to])
             ->where('orders.payment_status', 'paid')
             ->groupBy('order_items.name_snapshot')
@@ -71,6 +101,8 @@ class AdminReportController extends Controller
             'summary' => $summary,
             'statusBreakdown' => $statusBreakdown,
             'paymentBreakdown' => $paymentBreakdown,
+            'paymentMethodBreakdown' => $paymentMethodBreakdown,
+            'paymentMethodSummary' => $paymentMethodSummary,
             'dailySales' => $dailySales,
             'topItems' => $topItems,
         ]);
@@ -79,13 +111,31 @@ class AdminReportController extends Controller
     public function export(Request $request): StreamedResponse
     {
         [$from, $to] = $this->dateRange($request);
+        $cafeId = $this->currentCafeId();
         $filename = 'laporan-payment-cafe-'.$from->format('Ymd').'-'.$to->format('Ymd').'.csv';
 
-        return response()->streamDownload(function () use ($from, $to) {
+        return response()->streamDownload(function () use ($from, $to, $cafeId) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Kode', 'Tanggal', 'Meja', 'Pelanggan', 'Status', 'Pembayaran', 'Subtotal', 'Layanan', 'Total']);
+
+            $paidOrders = Order::query()
+                ->whereHas('table', fn ($query) => $query->where('cafe_id', $cafeId))
+                ->whereBetween('created_at', [$from, $to])
+                ->where('payment_status', 'paid');
+
+            $cashRevenue = (clone $paidOrders)->where('payment_method', 'cash')->sum('total');
+            $cashlessRevenue = (clone $paidOrders)->where('payment_method', '!=', 'cash')->sum('total');
+            $cashOrders = (clone $paidOrders)->where('payment_method', 'cash')->count();
+            $cashlessOrders = (clone $paidOrders)->where('payment_method', '!=', 'cash')->count();
+
+            fputcsv($handle, ['Ringkasan Metode Bayar']);
+            fputcsv($handle, ['Metode', 'Order Lunas', 'Total']);
+            fputcsv($handle, ['Cash', $cashOrders, $cashRevenue]);
+            fputcsv($handle, ['Cashless', $cashlessOrders, $cashlessRevenue]);
+            fputcsv($handle, []);
+            fputcsv($handle, ['Kode', 'Tanggal', 'Meja', 'Pelanggan', 'Status', 'Pembayaran', 'Metode Bayar', 'Subtotal', 'Layanan', 'Total']);
 
             Order::with('table')
+                ->whereHas('table', fn ($query) => $query->where('cafe_id', $cafeId))
                 ->whereBetween('created_at', [$from, $to])
                 ->orderBy('created_at')
                 ->chunk(200, function ($orders) use ($handle) {
@@ -97,6 +147,7 @@ class AdminReportController extends Controller
                             $order->customer_name,
                             $order->statusLabel(),
                             $order->paymentLabel(),
+                            $order->paymentMethodLabel(),
                             $order->subtotal,
                             $order->service_fee,
                             $order->total,

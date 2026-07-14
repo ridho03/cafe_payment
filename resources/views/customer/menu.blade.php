@@ -1,11 +1,14 @@
 @extends('layouts.app')
 
 @section('title', 'Pesan Menu - ' . $table->name)
-@section('auto_refresh', '45')
+@section('auto_refresh', '20')
 
 @section('content')
 @php
     $format = fn ($amount) => 'Rp ' . number_format($amount, 0, ',', '.');
+    $cafeName = $table->cafe?->name ?: $panelBrandName;
+    $midtransSetting = $table->cafe?->midtransSetting;
+    $midtransReady = $midtransSetting?->is_integrated && filled($midtransSetting?->client_key) && filled($midtransSetting?->server_key);
 @endphp
 
 <div class="min-h-dvh">
@@ -17,9 +20,12 @@
                 <div class="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(217,119,6,0.34),transparent_16rem),linear-gradient(135deg,rgba(38,19,7,0.95),rgba(88,44,14,0.86))]"></div>
                 <div class="relative">
                     <p class="text-sm font-extrabold text-amber-200">Scan QR berhasil</p>
-                    <div class="mt-1">
-                        <div>
-                            <h1 class="font-display text-3xl leading-tight sm:text-4xl">Menu {{ config('app.name') }}</h1>
+                    <div class="mt-2 flex flex-wrap items-center gap-3">
+                        <span class="pc-brand-mark size-14">
+                            <img src="{{ $appLogoUrl }}" alt="Logo {{ $cafeName }}" class="pc-brand-logo">
+                        </span>
+                        <div class="min-w-0">
+                            <h1 class="pc-wrap font-display text-3xl leading-tight sm:text-4xl">Menu {{ $cafeName }}</h1>
                             <p class="mt-1 text-sm font-semibold text-amber-100/75">{{ $table->name }} &middot; Kapasitas {{ $table->capacity }} orang</p>
                         </div>
                     </div>
@@ -65,27 +71,33 @@
                                     <h3 class="font-bold leading-5 text-stone-950">{{ $item->name }}</h3>
                                     <p class="mt-1 line-clamp-2 text-sm leading-5 text-stone-600">{{ $item->description }}</p>
                                     @if ($item->hasVariants())
-                                        <fieldset class="mt-3">
-                                            <legend class="sr-only">Pilih varian {{ $item->name }}</legend>
-                                            <div class="grid grid-cols-2 gap-2">
-                                                @foreach ($item->availableVariants() as $variant)
-                                                    <label class="relative">
-                                                        <input
-                                                            type="radio"
-                                                            name="item_variants[{{ $item->id }}]"
-                                                            value="{{ $variant }}"
-                                                            data-variant-input="{{ $item->id }}"
-                                                            data-variant-label="{{ \App\Models\MenuItem::variantLabel($variant) }}"
-                                                            @checked($loop->first)
-                                                            class="peer sr-only"
-                                                        >
-                                                        <span class="flex min-h-11 items-center justify-center rounded-lg border border-amber-100 bg-white px-2 text-sm font-extrabold text-stone-600 transition peer-checked:border-stone-950 peer-checked:bg-stone-950 peer-checked:text-amber-50 sm:px-3">
-                                                            {{ \App\Models\MenuItem::variantLabel($variant) }}
-                                                        </span>
-                                                    </label>
-                                                @endforeach
-                                            </div>
-                                        </fieldset>
+                                        <div class="mt-3 space-y-3">
+                                            @foreach ($item->availableVariantGroups() as $group)
+                                                <fieldset>
+                                                    <legend class="mb-1 text-xs font-extrabold uppercase text-stone-500">{{ $group['name'] }}</legend>
+                                                    <div class="grid grid-cols-2 gap-2">
+                                                        @foreach ($group['options'] as $option)
+                                                            <label class="relative">
+                                                                <input
+                                                                    type="radio"
+                                                                    name="item_variants[{{ $item->id }}][{{ $loop->parent->index }}]"
+                                                                    value="{{ $option['value'] }}"
+                                                                    data-variant-input="{{ $item->id }}"
+                                                                    data-variant-group="{{ $group['name'] }}"
+                                                                    data-variant-label="{{ $option['label'] }}"
+                                                                    data-variant-price-delta="{{ $option['price_delta'] }}"
+                                                                    @checked($loop->first)
+                                                                    class="peer sr-only"
+                                                                >
+                                                                <span class="flex min-h-11 items-center justify-center rounded-lg border border-amber-100 bg-white px-2 text-center text-sm font-extrabold text-stone-600 transition peer-checked:border-stone-950 peer-checked:bg-stone-950 peer-checked:text-amber-50 sm:px-3">
+                                                                    {{ $option['label'] }}@if($option['price_delta'] > 0) +{{ $format($option['price_delta']) }}@endif
+                                                                </span>
+                                                            </label>
+                                                        @endforeach
+                                                    </div>
+                                                </fieldset>
+                                            @endforeach
+                                        </div>
                                     @endif
                                     <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                                         <p class="pc-price">{{ $format($item->price) }}</p>
@@ -177,9 +189,31 @@
                                 </label>
                             </div>
                         </details>
-                        <div class="mt-3 rounded-lg border border-amber-100 bg-amber-50/80 p-3 text-sm font-semibold text-stone-700">
-                            Bayar lewat Midtrans sandbox atau Bayar Demo setelah checkout.
-                        </div>
+                        <fieldset class="mt-3 rounded-lg border border-amber-100 bg-white/80 p-3">
+                            <legend class="text-sm font-extrabold text-stone-800">Metode pembayaran</legend>
+                            <div class="mt-3 grid gap-2">
+                                <label class="flex min-h-12 items-center gap-3 rounded-lg border border-amber-100 bg-amber-50/70 px-3 text-sm font-bold text-stone-700">
+                                    <input name="payment_method" type="radio" value="cash" checked class="size-4 border-amber-300 text-amber-800 focus:ring-2 focus:ring-amber-800">
+                                    <span>
+                                        Cash
+                                        <span class="block text-xs font-semibold text-stone-500">Bayar di kasir.</span>
+                                    </span>
+                                </label>
+                                <label @class([
+                                    'flex min-h-12 items-center gap-3 rounded-lg border px-3 text-sm font-bold',
+                                    'border-amber-100 bg-amber-50/70 text-stone-700' => $midtransReady,
+                                    'border-stone-200 bg-stone-50 text-stone-400' => ! $midtransReady,
+                                ])>
+                                    <input name="payment_method" type="radio" value="midtrans_snap" @disabled(! $midtransReady) class="size-4 border-amber-300 text-amber-800 focus:ring-2 focus:ring-amber-800 disabled:opacity-50">
+                                    <span>
+                                        Cashless
+                                        <span class="block text-xs font-semibold {{ $midtransReady ? 'text-stone-500' : 'text-stone-400' }}">
+                                            {{ $midtransReady ? 'QRIS, e-wallet, kartu, atau VA.' : 'Belum aktif untuk cafe ini.' }}
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+                        </fieldset>
                     </div>
                 </details>
                 <button data-submit-order class="pc-button-primary mt-3 min-h-12 w-full text-base lg:mt-4">
@@ -228,12 +262,13 @@
         function render() {
             const selected = inputs
                 .map((input) => {
-                    const variantInput = form.querySelector('[data-variant-input="' + input.dataset.id + '"]:checked');
+                    const variantInputs = Array.from(form.querySelectorAll('[data-variant-input="' + input.dataset.id + '"]:checked'));
+                    const variantDelta = variantInputs.reduce((sum, variantInput) => sum + Number(variantInput.dataset.variantPriceDelta || 0), 0);
 
                     return {
                         name: input.dataset.name,
-                        variant: variantInput ? variantInput.dataset.variantLabel : '',
-                        price: Number(input.dataset.price || 0),
+                        variant: variantInputs.map((variantInput) => variantInput.dataset.variantGroup + ': ' + variantInput.dataset.variantLabel).join(', '),
+                        price: Number(input.dataset.price || 0) + variantDelta,
                         quantity: clampQuantity(input)
                     };
                 })

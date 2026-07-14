@@ -23,7 +23,7 @@ return new class extends Migration
             $table->unsignedInteger('total')->default(0);
             $table->string('status')->default('new');
             $table->string('payment_status')->default('unpaid');
-            $table->string('payment_method')->default('demo_qris');
+            $table->string('payment_method')->default('cash');
             $table->timestamp('paid_at')->nullable();
             $table->timestamps();
         });
